@@ -8,7 +8,7 @@ Uma aplicação web completa e responsiva para catálogo, busca e gerenciamento 
 ---
 
 ## 🔗 Acesse o Site
-👉 **[Clique aqui para ver a aplicação no ar](https://Kavan818.github.io/Kavan818.github.io/)**
+👉 **[Clique aqui para ver a aplicação no ar](https://kavan818-eng.github.io/Kavan818.github.io/)**
 
 ---
 
