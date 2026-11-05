@@ -161,6 +161,30 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
 
+
+               // Guarda gravações no navegador: se você sair antes de sincronizar, elas são enviadas depois
+        db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+        
+        let pendingWrites = 0;
+        window.addEventListener("beforeunload", e => {
+            if (pendingWrites > 0) { e.preventDefault(); e.returnValue = ""; }
+        });
+        
+        function showToast(msg, isError) {
+            let t = document.getElementById("toast");
+            if (!t) {
+                t = document.createElement("div");
+                t.id = "toast";
+                t.className = "fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium text-white transition";
+                document.body.appendChild(t);
+            }
+            t.textContent = msg;
+            t.className = t.className.replace(/bg-\S+/g, "") + (isError ? " bg-red-600" : " bg-gray-900");
+            t.style.display = "block";
+            clearTimeout(t._timer);
+            t._timer = setTimeout(() => { t.style.display = "none"; }, isError ? 7000 : 3000);
+        } 
+        
         // ================= UTILIDADES =================
         const CATEGORY_LABELS = { "café": "Café da Manhã", "almoco": "Almoço e Jantar", "sobremesa": "Sobremesa" };
         const CATEGORY_EMOJI = { "café": "🥞", "almoco": "🍝", "sobremesa": "🍰" };
@@ -421,15 +445,14 @@
             toggleModal("adminModal", true);
         }
 
-        async function saveRecipe(e) {
+        function saveRecipe(e) {
             e.preventDefault();
             if (!isAdmin()) { alert("Apenas administradores podem salvar receitas."); return; }
-
-            const btn = document.getElementById("saveRecipeBtn");
-            const label = btn.textContent;
+        
             const prepTime = document.getElementById("newPrepTime").value.trim();
-            const id = editingId !== null ? editingId : Date.now();
-
+            const isEdit = editingId !== null;
+            const id = isEdit ? editingId : Date.now();
+        
             const data = {
                 id,
                 title: document.getElementById("newTitle").value.trim(),
@@ -443,22 +466,23 @@
                 updatedBy: currentUser.email
             };
             if (!firestoreDocs.has(id)) data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-
-            btn.disabled = true;
-            btn.textContent = "Salvando...";
-            try {
-                await db.collection("recipes").doc(String(id)).set(data, { merge: true });
-                closeAdminModal();
-                alert(editingId !== null ? "Receita atualizada!" : "Receita adicionada com sucesso!");
-                editingId = null;
-            } catch (err) {
-                alert("Erro ao salvar: " + err.message + "\n\nVerifique as regras do Firestore e se seu e-mail está na lista de administradores.");
-            } finally {
-                btn.disabled = false;
-                btn.textContent = label;
-            }
+        
+            // Fecha o formulário na hora; o Firebase sincroniza em segundo plano
+            closeAdminModal();
+            editingId = null;
+            showToast("Salvando...");
+        
+            pendingWrites++;
+            db.collection("recipes").doc(String(id)).set(data, { merge: true })
+                .then(() => {
+                    pendingWrites--;
+                    showToast(isEdit ? "Receita atualizada ✓" : "Receita adicionada ✓");
+                })
+                .catch(err => {
+                    pendingWrites--;
+                    showToast("Não foi salvo: " + err.message, true);
+                });
         }
-
         // ================= FAVORITOS =================
         function updateFavCount() { document.getElementById("favCount").textContent = favorites.length; }
 
