@@ -77,9 +77,6 @@
                 <button onclick="loginWithGoogle()" class="w-full flex items-center justify-center gap-3 border border-gray-300 bg-white py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
                     <i class="fa-brands fa-google text-red-500"></i> Entrar com Google
                 </button>
-                <button onclick="loginAnonymously()" class="w-full flex items-center justify-center gap-3 border border-gray-300 bg-white py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
-                    <i class="fa-solid fa-user-secret text-gray-600"></i> Entrar como anônimo
-                </button>
             </div>
 
             <div class="flex items-center gap-3 mb-5 text-xs text-gray-400">
@@ -96,8 +93,9 @@
                     <input type="password" id="loginPassword" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 text-sm">
                 </div>
                 <button type="submit" class="w-full bg-orange-600 text-white py-2.5 rounded-lg font-medium hover:bg-orange-700 transition text-sm">Entrar</button>
+                <button type="button" onclick="handleRegister()" class="w-full border border-orange-200 text-orange-700 py-2.5 rounded-lg font-medium hover:bg-orange-50 transition text-sm">Criar uma conta</button>
             </form>
-            <p class="text-xs text-gray-500 mt-4">Somente administradores podem adicionar e editar receitas.</p>
+            <p class="text-xs text-gray-500 mt-4">Entre ou crie uma conta para favoritar receitas e comentar. Somente administradores podem adicionar e editar receitas.</p>
         </div>
     </div>
 
@@ -296,8 +294,11 @@
         let recipes = [...defaultRecipes];
         let firestoreDocs = new Map(); // id -> dados salvos (receitas novas e edições de receitas padrão)
 
+        // Favoritos são carregados da subcoleção users/{uid}/favorites.
         let favorites = [];
-        try { favorites = JSON.parse(localStorage.getItem('recipe_favorites')) || []; } catch { favorites = []; }
+        let favoriteCounts = new Map();
+        let favoritesUnsub = null;
+        let commentsUnsub = null;
 
         let activeFilterOnlyFavs = false;
         let currentServings = 2;
@@ -317,9 +318,14 @@
         db.collection("recipes").onSnapshot(
             snap => {
                 firestoreDocs = new Map();
+                favoriteCounts = new Map();
                 snap.docs.forEach(d => {
-                    const data = d.data();
-                    if (data && data.title && typeof data.id === "number") firestoreDocs.set(data.id, data);
+                    const data = d.data() || {};
+                    const numericId = Number(d.id);
+                    if (Number.isFinite(numericId) && data.favoriteCount !== undefined) {
+                        favoriteCounts.set(numericId, Number(data.favoriteCount) || 0);
+                    }
+                    if (data.title && typeof data.id === "number") firestoreDocs.set(data.id, data);
                 });
                 rebuildRecipes();
                 filterRecipes();
@@ -328,7 +334,7 @@
                     if (r) { renderDetailCard(r); renderRelated(r); }
                 }
             },
-            err => console.warn("Não foi possível carregar receitas do Firestore:", err.message)
+            err => { console.error("Não foi possível carregar receitas do Firestore:", err); showToast("Erro ao carregar receitas: " + err.message, true); }
         );
 
         // ================= AUTENTICAÇÃO =================
@@ -338,12 +344,17 @@
         }
 
         auth.onAuthStateChanged(user => {
-            currentUser = user;
+            // Encerra sessões anônimas antigas que possam ter ficado salvas no navegador.
+            if (user && user.isAnonymous) { auth.signOut(); return; }
+            currentUser = user || null;
+            if (favoritesUnsub) { favoritesUnsub(); favoritesUnsub = null; }
+            favorites = [];
+
             const authContainer = document.getElementById("authContainer");
             const adminBtn = document.getElementById("adminBtn");
 
-            if (user) {
-                const label = user.isAnonymous ? "Visitante (anônimo)" : (user.displayName || user.email || "Usuário");
+            if (currentUser) {
+                const label = currentUser.displayName || currentUser.email || "Usuário";
                 const badge = isAdmin() ? `<span class="text-[10px] font-bold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">ADMIN</span>` : "";
                 authContainer.innerHTML = `
                     <div class="flex items-center gap-2">
@@ -351,13 +362,21 @@
                         ${badge}
                         <button onclick="handleLogout()" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg font-medium transition">Sair</button>
                     </div>`;
+                favoritesUnsub = db.collection("users").doc(currentUser.uid).collection("favorites").onSnapshot(snap => {
+                    favorites = snap.docs.map(d => Number(d.id)).filter(Number.isFinite);
+                    updateFavCount();
+                    filterRecipes();
+                    if (currentRecipeId !== null) {
+                        const r = recipes.find(x => x.id === currentRecipeId);
+                        if (r) renderDetailCard(r);
+                    }
+                }, err => showToast("Erro ao carregar favoritos: " + err.message, true));
             } else {
                 authContainer.innerHTML = `<button onclick="openAuthModal()" class="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-700 transition">Entrar</button>`;
             }
             adminBtn.classList.toggle("hidden", !isAdmin());
-
+            updateFavCount();
             if (!isAdmin()) closeAdminModal();
-            // Atualiza botão "Editar" se estiver numa receita
             if (currentRecipeId !== null && !document.getElementById("detailView").classList.contains("hidden")) {
                 const r = recipes.find(x => x.id === currentRecipeId);
                 if (r) renderDetailCard(r);
@@ -413,10 +432,16 @@
                 });
         }
 
-        function loginAnonymously() {
-            auth.signInAnonymously()
-                .then(() => closeAuthModal())
-                .catch(err => alert("Erro ao entrar como anônimo: " + authErrorMessage(err)));
+        function handleRegister() {
+            const email = document.getElementById("loginEmail").value.trim();
+            const pass = document.getElementById("loginPassword").value;
+            if (!email || pass.length < 6) {
+                alert("Informe um e-mail válido e uma senha com pelo menos 6 caracteres.");
+                return;
+            }
+            auth.createUserWithEmailAndPassword(email, pass)
+                .then(() => { closeAuthModal(); document.getElementById("loginEmail").value = ""; document.getElementById("loginPassword").value = ""; showToast("Conta criada com sucesso!"); })
+                .catch(err => alert("Erro ao criar conta: " + authErrorMessage(err)));
         }
 
         function handleLogout() { auth.signOut(); }
@@ -488,16 +513,21 @@
 
         // ================= FAVORITOS =================
         function updateFavCount() { document.getElementById("favCount").textContent = favorites.length; }
+        function getFavoriteCount(id) { return favoriteCounts.get(Number(id)) || 0; }
 
-        function toggleFavorite(id, event) {
+        async function toggleFavorite(id, event) {
             if (event) event.stopPropagation();
-            favorites = favorites.includes(id) ? favorites.filter(f => f !== id) : [...favorites, id];
-            try { localStorage.setItem('recipe_favorites', JSON.stringify(favorites)); } catch {}
-            updateFavCount();
-            filterRecipes();
-            if (!document.getElementById("detailView").classList.contains("hidden")) {
-                const r = recipes.find(x => x.id === id);
-                if (r) renderDetailCard(r);
+            if (!currentUser) {
+                showToast("Entre ou crie uma conta para salvar favoritos.", true);
+                openAuthModal();
+                return;
+            }
+            const ref = db.collection("users").doc(currentUser.uid).collection("favorites").doc(String(id));
+            try {
+                if (favorites.includes(id)) await ref.delete();
+                else await ref.set({ recipeId: id, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+            } catch (err) {
+                showToast("Não foi possível atualizar o favorito: " + err.message, true);
             }
         }
 
@@ -535,7 +565,7 @@
                     <div class="p-4 flex flex-col flex-grow">
                         <span class="text-xs font-semibold text-orange-600 uppercase tracking-wider mb-1">${esc(CATEGORY_LABELS[recipe.category] || recipe.category)}</span>
                         <h3 class="font-bold text-gray-900 text-base mb-2 line-clamp-1">${esc(recipe.title)}</h3>
-                        <div class="mt-auto flex items-center text-xs text-gray-500"><i class="fa-regular fa-clock mr-1.5"></i> ${esc(recipe.prepTime)}</div>
+                        <div class="mt-auto flex items-center justify-between text-xs text-gray-500"><span><i class="fa-regular fa-clock mr-1.5"></i>${esc(recipe.prepTime)}</span><span><i class="fa-solid fa-heart text-red-400 mr-1"></i>${getFavoriteCount(recipe.id)} favorito(s)</span></div>
                     </div>`;
                 grid.appendChild(card);
             });
@@ -595,7 +625,8 @@
                         ${editBtn}
                     </div>
                 </div>
-                <h1 class="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-6">${esc(recipe.title)}</h1>
+                <h1 class="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-2">${esc(recipe.title)}</h1>
+                <p class="text-sm text-gray-500 mb-6"><i class="fa-solid fa-heart text-red-400 mr-1"></i>${getFavoriteCount(recipe.id)} pessoa(s) favoritaram esta receita</p>
 
                 <div class="bg-orange-50/50 border border-orange-100 p-4 rounded-xl flex items-center justify-between mb-6">
                     <span class="text-sm font-medium text-gray-700">Porções:</span>
@@ -619,7 +650,57 @@
                             ${(recipe.instructions || []).map((ins, idx) => `<li class="flex items-start"><span class="font-bold text-orange-600 mr-3 flex-shrink-0">${idx + 1}.</span><span>${esc(ins)}</span></li>`).join('')}
                         </ol>
                     </div>
-                </div>`;
+                </div>
+
+                <section class="mt-10 border-t border-gray-100 pt-8">
+                    <h2 class="text-xl font-bold text-gray-900 mb-4">Comentários</h2>
+                    <form onsubmit="addComment(event, ${recipe.id})" class="mb-6">
+                        <textarea id="commentInput" maxlength="1000" required rows="3" placeholder="Compartilhe sua opinião sobre esta receita..." class="w-full border border-gray-200 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" ${currentUser ? "" : "disabled"}></textarea>
+                        <div class="flex items-center justify-between mt-2 gap-3">
+                            <span class="text-xs text-gray-500">${currentUser ? "Seja respeitoso nos comentários." : "Entre para comentar."}</span>
+                            <button type="submit" ${currentUser ? "" : "disabled"} class="bg-orange-600 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg text-sm font-medium">Enviar comentário</button>
+                        </div>
+                    </form>
+                    <div id="commentsList" class="space-y-4"><p class="text-sm text-gray-500">Carregando comentários...</p></div>
+                </section>`;
+            listenComments(recipe.id);
+        }
+
+        function listenComments(recipeId) {
+            if (commentsUnsub) commentsUnsub();
+            const list = document.getElementById("commentsList");
+            if (!list) return;
+            commentsUnsub = db.collection("recipes").doc(String(recipeId)).collection("comments")
+                .orderBy("createdAt", "desc").limit(50).onSnapshot(snap => {
+                    const target = document.getElementById("commentsList");
+                    if (!target) return;
+                    if (snap.empty) { target.innerHTML = `<p class="text-sm text-gray-500">Ainda não há comentários. Seja o primeiro!</p>`; return; }
+                    target.innerHTML = snap.docs.map(doc => {
+                        const c = doc.data();
+                        const date = c.createdAt && c.createdAt.toDate ? c.createdAt.toDate().toLocaleString("pt-BR") : "Agora";
+                        return `<article class="bg-gray-50 rounded-xl p-4"><div class="flex items-center justify-between gap-3 mb-2"><strong class="text-sm text-gray-900">${esc(c.authorName || "Usuário")}</strong><time class="text-xs text-gray-500">${esc(date)}</time></div><p class="text-sm text-gray-700 whitespace-pre-wrap break-words">${esc(c.text || "")}</p></article>`;
+                    }).join("");
+                }, err => {
+                    const target = document.getElementById("commentsList");
+                    if (target) target.innerHTML = `<p class="text-sm text-red-600">Erro ao carregar comentários: ${esc(err.message)}</p>`;
+                });
+        }
+
+        async function addComment(event, recipeId) {
+            event.preventDefault();
+            if (!currentUser) { openAuthModal(); showToast("Entre para comentar.", true); return; }
+            const input = document.getElementById("commentInput");
+            const value = input.value.trim();
+            if (!value || value.length > 1000) return;
+            try {
+                await db.collection("recipes").doc(String(recipeId)).collection("comments").add({
+                    text: value, authorUid: currentUser.uid,
+                    authorName: currentUser.displayName || (currentUser.email ? currentUser.email.split("@")[0] : "Usuário"),
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                input.value = "";
+                showToast("Comentário publicado!");
+            } catch (err) { showToast("Não foi possível publicar: " + err.message, true); }
         }
 
         function changeServings(id, delta) {
@@ -655,6 +736,7 @@
             document.getElementById("detailView").classList.add("hidden");
             document.getElementById("catalogView").classList.remove("hidden");
             currentRecipeId = null;
+            if (commentsUnsub) { commentsUnsub(); commentsUnsub = null; }
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
