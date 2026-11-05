@@ -425,6 +425,8 @@
             if (!isAdmin()) { alert("Apenas administradores podem adicionar ou editar receitas."); return; }
             const form = document.getElementById("recipeForm");
             form.reset();
+            const saveBtn = document.getElementById("saveRecipeBtn");
+            saveBtn.disabled = false;
             editingId = (typeof id === "number") ? id : null;
 
             if (editingId !== null) {
