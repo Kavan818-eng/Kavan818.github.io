@@ -1,805 +1,447 @@
 <!DOCTYPE html>
-<html lang="pt-BR" class="h-full bg-slate-50">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Armazém das Receitas - Seu Caderno Digital de Culinária</title>
-    <!-- Tailwind CSS -->
+    <title>Armazém das Receitas</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            50: '#fff7ed',
-                            100: '#ffedd5',
-                            500: '#f97316',
-                            600: '#ea580c',
-                            700: '#c2410c',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-        
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(14px);
-            border: 1px solid rgba(229, 231, 235, 0.8);
-        }
 
-        @media print {
-            header, footer, .no-print, .filter-bar, button { display: none !important; }
-            body { background: white !important; color: black !important; }
-            .print-card { border: none !important; box-shadow: none !important; }
-        }
-    </style>
+    <!-- Firebase SDKs (Compat Version) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 </head>
-<body class="h-full flex flex-col text-slate-800 antialiased selection:bg-brand-500 selection:text-white">
+<body class="bg-gray-50 text-gray-800 font-sans min-h-screen flex flex-col">
 
-    <!-- HEADER / NAVBAR -->
-    <header class="sticky top-0 z-40 glass-panel shadow-sm no-print">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-16">
-                <!-- Logo & Brand -->
-                <div class="flex items-center gap-3 cursor-pointer" onclick="showCatalogView()">
-                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-amber-500 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
-                        <i class="fa-solid fa-utensils text-lg"></i>
-                    </div>
-                    <div>
-                        <span class="text-xl font-extrabold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Armazém das Receitas</span>
-                        <span class="hidden sm:inline-block text-[10px] font-bold px-2 py-0.5 ml-2 bg-brand-100 text-brand-700 rounded-full uppercase tracking-wider">Pro Edition</span>
-                    </div>
-                </div>
+    <!-- Navbar -->
+    <header class="bg-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center space-x-2 cursor-pointer" onclick="goHome()">
+                <i class="fa-solid fa-utensils text-orange-600 text-2xl"></i>
+                <span class="text-xl font-bold text-gray-900 tracking-tight">Armazém das Receitas</span>
+            </div>
 
-                <!-- Action Controls -->
-                <div class="flex items-center gap-2 sm:gap-3">
-                    <!-- Deploy Guide Button -->
-                    <button onclick="openModal('modal-deploy')" class="px-3 py-2 text-xs font-semibold rounded-xl text-slate-700 hover:text-brand-600 hover:bg-slate-100 transition flex items-center gap-1.5">
-                        <i class="fa-solid fa-rocket text-brand-600"></i>
-                        <span class="hidden md:inline">Colocar no Ar</span>
+            <!-- Controles de Ação -->
+            <div class="flex items-center space-x-3">
+                <button id="showFavsBtn" onclick="toggleFavFilter()" class="bg-orange-50 text-orange-600 border border-orange-200 px-3.5 py-2 rounded-lg text-sm font-medium hover:bg-orange-100 transition flex items-center gap-2">
+                    <i class="fa-solid fa-heart"></i> Favoritos (<span id="favCount">0</span>)
+                </button>
+                <button id="adminBtn" onclick="openAdminModal()" class="hidden bg-gray-900 text-white px-3.5 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition flex items-center gap-2">
+                    <i class="fa-solid fa-plus"></i> Nova Receita
+                </button>
+                <div id="authContainer">
+                    <button onclick="openAuthModal()" class="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-700 transition">
+                        Entrar / Admin
                     </button>
-
-                    <!-- Favorites Counter Filter -->
-                    <button id="btn-favs-filter" onclick="toggleFavoritesFilter()" class="px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-700 transition flex items-center gap-1.5 border border-slate-200/60">
-                        <i class="fa-solid fa-heart text-rose-500"></i>
-                        <span>Favoritos (<span id="fav-count">0</span>)</span>
-                    </button>
-
-                    <!-- Admin Add Button -->
-                    <button id="btn-add-recipe" onclick="openRecipeFormModal()" class="hidden px-3.5 py-2 text-xs font-bold bg-brand-600 text-white rounded-xl shadow-md hover:bg-brand-700 transition flex items-center gap-1.5">
-                        <i class="fa-solid fa-circle-plus"></i>
-                        <span>Nova Receita</span>
-                    </button>
-
-                    <!-- Auth Control -->
-                    <div id="auth-box">
-                        <button id="btn-auth-open" onclick="openModal('modal-auth')" class="px-4 py-2 text-xs font-semibold bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition flex items-center gap-1.5">
-                            <i class="fa-solid fa-user"></i>
-                            <span>Entrar</span>
-                        </button>
-                        
-                        <div id="user-profile" class="hidden flex items-center gap-2 border-l border-slate-200 pl-3 ml-1">
-                            <div class="text-right hidden sm:block">
-                                <div id="user-name-display" class="text-xs font-bold text-slate-800"></div>
-                                <div id="user-badge" class="text-[10px] text-brand-600 font-extrabold uppercase"></div>
-                            </div>
-                            <button onclick="logout()" title="Sair" class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition">
-                                <i class="fa-solid fa-right-from-bracket"></i>
-                            </button>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
     </header>
 
-    <!-- MAIN APP CONTAINER -->
-    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        
+    <!-- Main Content -->
+    <main class="flex-grow max-w-7xl mx-auto px-4 py-8 w-full">
+
         <!-- CATALOG VIEW -->
-        <section id="view-catalog" class="space-y-6">
-            
-            <!-- Filters & Search Toolbar -->
-            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 space-y-4 no-print">
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <!-- Search Input -->
-                    <div class="relative md:col-span-2">
-                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                        <input type="text" id="searchInput" oninput="filterRecipes()" placeholder="Buscar por título ou ingrediente..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition">
-                    </div>
-
-                    <!-- Category Filter -->
-                    <div>
-                        <select id="categoryFilter" onchange="filterRecipes()" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
-                            <option value="tudo">Todas as Categorias</option>
-                            <option value="café">Café da Manhã</option>
-                            <option value="almoco">Almoço e Jantar</option>
-                            <option value="sobremesa">Sobremesas</option>
-                            <option value="saudavel">Saudável / Fit</option>
-                        </select>
-                    </div>
-
-                    <!-- Prep Time Filter -->
-                    <div>
-                        <select id="timeFilter" onchange="filterRecipes()" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
-                            <option value="tudo">Qualquer Tempo</option>
-                            <option value="quick">Rápido (Até 15 min)</option>
-                            <option value="medium">Médio (15 a 30 min)</option>
-                            <option value="long">Longo (+30 min)</option>
-                        </select>
-                    </div>
+        <section id="catalogView">
+            <!-- Barra de Filtros -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="relative">
+                    <i class="fa-solid fa-search absolute left-3.5 top-3.5 text-gray-400"></i>
+                    <input type="text" id="searchInput" oninput="filterRecipes()" placeholder="Buscar por receita ou ingrediente..." class="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm">
                 </div>
+                
+                <select id="categoryFilter" onchange="filterRecipes()" class="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm bg-white">
+                    <option value="tudo">Todas as Categorias</option>
+                    <option value="café">Café da Manhã</option>
+                    <option value="almoco">Almoço e Jantar</option>
+                    <option value="sobremesa">Sobremesas</option>
+                </select>
+
+                <select id="timeFilter" onchange="filterRecipes()" class="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm bg-white">
+                    <option value="tudo">Qualquer Tempo</option>
+                    <option value="quick">Rápido (até 15 min)</option>
+                    <option value="medium">Médio (15 a 30 min)</option>
+                    <option value="long">Longo (+30 min)</option>
+                </select>
             </div>
 
-            <!-- Recipe Grid -->
-            <div id="recipeGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                <!-- Dynamically filled by JS -->
-            </div>
+            <!-- Grid de Receitas -->
+            <div id="recipeGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
         </section>
 
-        <!-- RECIPE DETAIL VIEW -->
-        <section id="view-detail" class="hidden max-w-5xl mx-auto space-y-6">
-            <button onclick="showCatalogView()" class="no-print inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-brand-600 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm transition">
-                <i class="fa-solid fa-arrow-left"></i> Voltar ao Catálogo
+        <!-- DETAIL VIEW -->
+        <section id="detailView" class="hidden">
+            <button onclick="goHome()" class="mb-6 inline-flex items-center text-sm font-medium text-orange-600 hover:text-orange-700">
+                <i class="fa-solid fa-arrow-left mr-2"></i> Voltar para o catálogo
             </button>
 
-            <article id="recipeDetailCard" class="bg-white rounded-3xl border border-slate-200/80 shadow-lg overflow-hidden print-card">
-                <!-- Filled dynamically by JS -->
-            </article>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Conteúdo Principal da Receita -->
+                <article id="mainRecipeContent" class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden p-6 sm:p-8"></article>
+
+                <!-- Sidebar de Relacionadas -->
+                <aside class="space-y-4">
+                    <h3 class="text-lg font-bold text-gray-900 border-b pb-2">Receitas Relacionadas</h3>
+                    <div id="relatedList" class="space-y-3"></div>
+                </aside>
+            </div>
         </section>
 
     </main>
 
-    <!-- FOOTER -->
-    <footer class="bg-white border-t border-slate-200 py-6 mt-12 text-center text-xs text-slate-500 no-print">
-        <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <p>© 2026 <b>Armazém das Receitas</b> — Plataforma Digital de Culinária.</p>
-            <div class="flex gap-4 font-semibold text-slate-600">
-                <button onclick="openModal('modal-deploy')" class="hover:text-brand-600 transition">Guia de Hospedagem</button>
-                <button onclick="openModal('modal-auth')" class="hover:text-brand-600 transition">Painel do Usuário / Admin</button>
-            </div>
-        </div>
-    </footer>
-
-    <!-- MODAL 1: AUTHENTICATION -->
-    <div id="modal-auth" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-100 overflow-hidden">
-            <div class="p-6">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-lg font-bold text-slate-900">Acessar / Entrar no Sistema</h3>
-                    <button onclick="closeModal('modal-auth')" class="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
-                        <i class="fa-solid fa-xmark text-lg"></i>
-                    </button>
-                </div>
-
-                <!-- Google & Anonymous Login Options -->
-                <div class="space-y-3 mb-4">
-                    <button onclick="loginWithGoogle()" class="w-full py-2.5 px-4 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition flex items-center justify-center gap-2">
-                        <i class="fa-brands fa-google text-red-500"></i> Entrar com Google
-                    </button>
-                    <button onclick="loginAnonymously()" class="w-full py-2.5 px-4 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-user-secret text-slate-500"></i> Entrar como Visitante Anônimo
-                    </button>
-                </div>
-
-                <div class="relative flex py-2 items-center mb-4">
-                    <div class="flex-grow border-t border-slate-200"></div>
-                    <span class="flex-shrink mx-4 text-[10px] text-slate-400 font-bold uppercase">Ou com Email</span>
-                    <div class="flex-grow border-t border-slate-200"></div>
-                </div>
-
-                <form onsubmit="handleAuthSubmit(event)" class="space-y-4">
-                    <div>
-                        <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">E-mail</label>
-                        <input type="email" id="auth-email" required placeholder="seu@email.com" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-brand-500">
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">Senha</label>
-                        <input type="password" id="auth-password" required placeholder="••••••••" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-brand-500">
-                    </div>
-
-                    <div class="bg-amber-50 p-3 rounded-xl border border-amber-200/80">
-                        <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-amber-900">
-                            <input type="checkbox" id="auth-is-admin" class="w-4 h-4 text-brand-600 rounded focus:ring-brand-500">
-                            Entrar como Administrador (Permissão CRUD)
-                        </label>
-                    </div>
-
-                    <button type="submit" class="w-full py-3 bg-brand-600 text-white font-bold text-xs rounded-xl hover:bg-brand-700 transition shadow-md shadow-brand-500/20">
-                        Entrar / Cadastrar
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL 2: ADD / EDIT RECIPE FORM (ADMIN) -->
-    <div id="modal-recipe-form" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-100 overflow-hidden max-h-[90vh] flex flex-col">
-            <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <h3 id="recipe-form-title" class="text-lg font-bold text-slate-900">Nova Receita</h3>
-                <button onclick="closeModal('modal-recipe-form')" class="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
-                    <i class="fa-solid fa-xmark text-lg"></i>
-                </button>
-            </div>
-
-            <form id="recipeForm" onsubmit="handleSaveRecipe(event)" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
-                <input type="hidden" id="form-recipe-id">
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block font-bold text-slate-600 uppercase mb-1">Título da Receita</label>
-                        <input type="text" id="form-title" required placeholder="Ex: Torta Doce de Morango" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-500">
-                    </div>
-
-                    <div>
-                        <label class="block font-bold text-slate-600 uppercase mb-1">Categoria</label>
-                        <select id="form-category" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-500 bg-white">
-                            <option value="café">Café da Manhã</option>
-                            <option value="almoco">Almoço e Jantar</option>
-                            <option value="sobremesa">Sobremesas</option>
-                            <option value="saudavel">Saudável / Fit</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block font-bold text-slate-600 uppercase mb-1">Tempo de Preparo (minutos)</label>
-                        <input type="number" id="form-time" min="1" required placeholder="25" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-500">
-                    </div>
-                    <div>
-                        <label class="block font-bold text-slate-600 uppercase mb-1">URL da Imagem</label>
-                        <input type="url" id="form-image" required placeholder="https://images.unsplash.com/..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-500">
-                    </div>
-                </div>
-
+    <!-- Modal de Login -->
+    <div id="authModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 relative">
+            <button onclick="closeAuthModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Acesso Administrativo</h3>
+            <form onsubmit="handleLogin(event)" class="space-y-4">
                 <div>
-                    <label class="block font-bold text-slate-600 uppercase mb-1">Ingredientes (Um por linha)</label>
-                    <textarea id="form-ingredients" rows="4" required placeholder="2 xícaras de farinha&#10;1 colher de manteiga&#10;3 ovos" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-500"></textarea>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
+                    <input type="email5" id="loginEmail" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 text-sm">
                 </div>
-
                 <div>
-                    <label class="block font-bold text-slate-600 uppercase mb-1">Modo de Preparo (Um passo por linha)</label>
-                    <textarea id="form-instructions" rows="4" required placeholder="Misture tudo numa tigela.&#10;Leve ao forno por 30 minutos." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-500"></textarea>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+                    <input type="password" id="loginPassword" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 text-sm">
                 </div>
-
-                <div class="pt-4 flex justify-end gap-3">
-                    <button type="button" onclick="closeModal('modal-recipe-form')" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold">Cancelar</button>
-                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-brand-600 text-white font-bold shadow-md hover:bg-brand-700">Salvar Receita</button>
-                </div>
+                <button type="submit" class="w-full bg-orange-600 text-white py-2.5 rounded-lg font-medium hover:bg-orange-700 transition text-sm">Entrar</button>
             </form>
         </div>
     </div>
 
-    <!-- MODAL 3: DEPLOYMENT GUIDE -->
-    <div id="modal-deploy" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-white w-full max-w-3xl rounded-3xl shadow-2xl border border-slate-100 overflow-hidden max-h-[90vh] flex flex-col">
-            <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-900 text-white">
-                <div class="flex items-center gap-2">
-                    <i class="fa-solid fa-rocket text-brand-500"></i>
-                    <h3 class="text-lg font-bold">Guia: Como Colocar Este Site no Ar (Hospedagem Grátis)</h3>
+    <!-- Modal Adicionar Receita (Admin) -->
+    <div id="adminModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl max-w-xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
+            <button onclick="closeAdminModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Adicionar Nova Receita</h3>
+            <form onsubmit="saveNewRecipe(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Título da Receita</label>
+                    <input type="text" id="newTitle" required class="w-full px-3 py-2 border rounded-lg text-sm">
                 </div>
-                <button onclick="closeModal('modal-deploy')" class="p-1 text-slate-400 hover:text-white rounded-lg">
-                    <i class="fa-solid fa-xmark text-lg"></i>
-                </button>
-            </div>
-
-            <div class="p-6 space-y-6 overflow-y-auto text-xs">
-                <!-- Option 1: Vercel -->
-                <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200">
-                    <h4 class="font-bold text-sm text-slate-900 mb-2 flex items-center gap-2">
-                        <span class="w-6 h-6 rounded-lg bg-slate-900 text-white flex items-center justify-center text-[10px]">1</span>
-                        Vercel (Recomendado - Instantâneo)
-                    </h4>
-                    <ol class="list-decimal pl-5 space-y-1 text-slate-600">
-                        <li>Salve este código em um arquivo chamado <code class="bg-slate-200 px-1 py-0.5 rounded text-slate-900">index.html</code> dentro de uma pasta no seu computador.</li>
-                        <li>Acesse o site <b>vercel.com</b> e crie uma conta gratuita.</li>
-                        <li>Na dashboard da Vercel, basta arrastar e soltar a pasta do seu projeto.</li>
-                        <li>O site ficará no ar com link HTTPS e suporte global em menos de 10 segundos!</li>
-                    </ol>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+                        <select id="newCategory" class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
+                            <option value="café">Café da Manhã</option>
+                            <option value="almoco">Almoço e Jantar</option>
+                            <option value="sobremesa">Sobremesa</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Tempo de Preparo (ex: 20 min)</label>
+                        <input type="text" id="newPrepTime" required class="w-full px-3 py-2 border rounded-lg text-sm">
+                    </div>
                 </div>
-
-                <!-- Option 2: Netlify -->
-                <div class="p-4 rounded-2xl bg-teal-50/50 border border-teal-200/60">
-                    <h4 class="font-bold text-sm text-teal-950 mb-2 flex items-center gap-2">
-                        <span class="w-6 h-6 rounded-lg bg-teal-600 text-white flex items-center justify-center text-[10px]">2</span>
-                        Netlify Drop (Sem Instalações)
-                    </h4>
-                    <ol class="list-decimal pl-5 space-y-1 text-teal-900">
-                        <li>Acesse <b>app.netlify.com/drop</b>.</li>
-                        <li>Arraste e solte a pasta contendo o arquivo <code class="bg-teal-100 px-1 py-0.5 rounded text-teal-950">index.html</code>.</li>
-                        <li>Seu site é publicado imediatamente com domínio personalizado grátis.</li>
-                    </ol>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">URL da Imagem</label>
+                    <input type="url" id="newImage" required class="w-full px-3 py-2 border rounded-lg text-sm">
                 </div>
-
-                <!-- Option 3: GitHub Pages -->
-                <div class="p-4 rounded-2xl bg-amber-50/50 border border-amber-200/60">
-                    <h4 class="font-bold text-sm text-amber-950 mb-2 flex items-center gap-2">
-                        <span class="w-6 h-6 rounded-lg bg-amber-600 text-white flex items-center justify-center text-[10px]">3</span>
-                        GitHub Pages
-                    </h4>
-                    <ol class="list-decimal pl-5 space-y-1 text-amber-900">
-                        <li>Crie um repositório público no <b>github.com</b>.</li>
-                        <li>Faça o upload do arquivo <code class="bg-amber-100 px-1 py-0.5 rounded text-amber-950">index.html</code>.</li>
-                        <li>Vá em <b>Settings > Pages</b> e ative o site escolhendo a branch <b>main</b>.</li>
-                    </ol>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Ingredientes (um por linha)</label>
+                    <textarea id="newIngredients" rows="3" required class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="1 xícara de farinha..."></textarea>
                 </div>
-            </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Instruções (uma por linha)</label>
+                    <textarea id="newInstructions" rows="3" required class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Misture os ingredientes..."></textarea>
+                </div>
+                <button type="submit" class="w-full bg-orange-600 text-white py-2.5 rounded-lg font-medium hover:bg-orange-700 transition text-sm">Salvar Receita</button>
+            </form>
         </div>
     </div>
 
-    <!-- FIREBASE & APP SCRIPT -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithCustomToken, signInAnonymously, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // APP CONFIG & INITIALIZATION
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'armazem-receitas-app';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-            apiKey: "demo-api-key",
-            authDomain: "demo-app.firebaseapp.com",
-            projectId: "demo-app",
-            storageBucket: "demo-app.appspot.com",
-            messagingSenderId: "123456789",
-            appId: "1:123456789:web:123456"
+    <!-- JavaScript Principal -->
+    <script>
+        // Configuração Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyBvAV3n_R7zgMJgRWW65ncz7RKEBFVU9g8",
+            authDomain: "armazem-das-receitas.firebaseapp.com",
+            projectId: "armazem-das-receitas",
+            storageBucket: "armazem-das-receitas.firebasestorage.app",
+            messagingSenderId: "38048677953",
+            appId: "1:38048677953:web:e6c4b6dc2fe634ed9e06c0",
+            measurementId: "G-04K9PQ17JC"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
 
-        // INITIAL 30 RECIPES WITH VERIFIED HIGH QUALITY IMAGES
-        const defaultRecipes = [
-            // Café da Manhã (1-8)
-            { id: 1, title: "Panquecas Americanas", category: "café", prepTime: "15 min", timeMinutes: 15, image: "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=800&q=80", ingredients: ["1 xícara de farinha de trigo", "2 colheres de sopa de açúcar", "1 xícara de leite", "1 ovo", "1 colher de fermento"], instructions: ["Misture os ingredientes secos numa tigela.", "Adicione o leite e o ovo e bata até ficar homogêneo.", "Aqueça uma frigideira antiaderente e despeje pequenas porções.", "Vire quando surgirem bolhas e doure o outro lado."] },
-            { id: 2, title: "Ovos Mexidos Cremosos", category: "café", prepTime: "10 min", timeMinutes: 10, image: "https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=800&q=80", ingredients: ["3 ovos", "1 colher de manteiga", "2 colheres de creme de leite", "Sal e pimenta a gosto"], instructions: ["Bata os ovos levemente com um garfo.", "Derreta a manteiga em fogo baixo.", "Adicione os ovos e mexa continuamente com uma espátula.", "Desligue o fogo antes de secar totalmente e misture o creme de leite."] },
-            { id: 3, title: "Torrada com Abacate (Toast)", category: "café", prepTime: "8 min", timeMinutes: 8, image: "https://images.unsplash.com/photo-1588137378633-dea1336ce1e2?auto=format&fit=crop&w=800&q=80", ingredients: ["2 fatias de pão integral", "1 abacate maduro", "Azeite de oliva", "Suco de 1/2 limão", "Sal e pimenta"], instructions: ["Toste as fatias de pão até ficarem crocantes.", "Amasse o abacate com um garfo e tempere com limão, azeite, sal e pimenta.", "Espalhe o abacate sobre as torradas e sirva."] },
-            { id: 4, title: "Vitamina de Banana e Aveia", category: "café", prepTime: "5 min", timeMinutes: 5, image: "https://images.unsplash.com/photo-1553530666-ba11a7da3888?auto=format&fit=crop&w=800&q=80", ingredients: ["2 bananas maduras", "300ml de leite integral ou vegetal", "2 colheres de sopa de aveia", "1 colher de mel"], instructions: ["Corte as bananas em rodelas.", "Adicione todos os ingredientes no liquidificador.", "Bata por 2 minutos em velocidade alta até obter um creme homogêneo."] },
-            { id: 5, title: "Tapioca de Queijo e Presunto", category: "café", prepTime: "7 min", timeMinutes: 7, image: "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&w=800&q=80", ingredients: ["3 colheres de massa pronta para tapioca", "2 fatias de queijo muçarela", "2 fatias de presunto", "Orégano"], instructions: ["Peneire a massa na frigideira bem aquecida.", "Espere a massa unir e adicione o queijo e o presunto.", "Polvilhe orégano, dobre ao meio e espere o queijo derreter."] },
-            { id: 6, title: "Crepioca Fit", category: "saudavel", prepTime: "10 min", timeMinutes: 10, image: "https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=800&q=80", ingredients: ["1 ovo", "2 colheres de massa de tapioca", "1 colher de requeijão light", "Sal a gosto"], instructions: ["Bata o ovo com a goma de tapioca e o sal em uma tigela.", "Despeje a mistura em frigideira aquecida.", "Doure dos dois lados e recheie com o requeijão."] },
-            { id: 7, title: "Iogurte com Granola e Frutas", category: "café", prepTime: "5 min", timeMinutes: 5, image: "https://images.unsplash.com/photo-1488477181946-6428a0291777?auto=format&fit=crop&w=800&q=80", ingredients: ["200g de iogurte natural", "1/2 xícara de granola", "Morangos e mirtilos", "Mel a gosto"], instructions: ["Coloque o iogurte no fundo de uma taça.", "Adicione a granola por cima.", "Decore com as frutas fatiadas e adicione um fio de mel."] },
-            { id: 8, title: "Pão de Queijo de Frigideira", category: "café", prepTime: "12 min", timeMinutes: 12, image: "https://images.unsplash.com/photo-1598103442097-8b74394b95c6?auto=format&fit=crop&w=800&q=80", ingredients: ["1 ovo", "2 colheres de polvilho azedo", "1 colher de requeijão", "50g de queijo ralado", "Pitada de sal"], instructions: ["Misture bem todos os ingredientes com um garfo.", "Despeje em frigideira untada em fogo baixo.", "Doure de um lado e depois vire para dourar o outro."] },
-
-            // Almoço e Jantar (9-22)
-            { id: 9, title: "Spaghetti à Carbonara", category: "almoco", prepTime: "25 min", timeMinutes: 25, image: "https://images.unsplash.com/photo-1612874742237-6526221588e3?auto=format&fit=crop&w=800&q=80", ingredients: ["200g de espaguete", "100g de bacon picado", "2 gemas de ovo", "50g de queijo parmesão", "Pimenta-do-reino"], instructions: ["Cozinhe o macarrão em água com sal.", "Frite o bacon até ficar crocante.", "Misture as gemas com o queijo ralado e pimenta numa tigela.", "Junte o macarrão quente ao bacon, desligue o fogo e incorpore a mistura de ovos."] },
-            { id: 10, title: "Strogonoff de Frango", category: "almoco", prepTime: "30 min", timeMinutes: 30, image: "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=800&q=80", ingredients: ["500g de peito de frango em cubos", "1 lata de creme de leite", "2 colheres de ketchup", "1 colher de mostarda", "1/2 cebola picada"], instructions: ["Refogue a cebola e doure o frango.", "Adicione a mostarda e o ketchup.", "Desligue o fogo e misture o creme de leite.", "Sirva com arroz e batata palha."] },
-            { id: 11, title: "Arroz de Carreteiro Fácil", category: "almoco", prepTime: "35 min", timeMinutes: 35, image: "https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=800&q=80", ingredients: ["2 xícaras de arroz", "200g de carne seca dessalgada", "1 linguiça calabresa", "Cebola e alho picados", "Cheiro-verde"], instructions: ["Frite a carne seca e a calabresa até dourarem.", "Adicione o alho, cebola e refogue.", "Junte o arroz, adicione água quente e cozinhe em fogo baixo.", "Finalize com cheiro-verde."] },
-            { id: 12, title: "Escondidinho de Carne Moída", category: "almoco", prepTime: "40 min", timeMinutes: 40, image: "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=80", ingredients: ["500g de batata cozida", "400g de carne moída", "Leite e manteiga", "100g de queijo muçarela"], instructions: ["Cozinhe a carne moída temperada a gosto.", "Amasse as batatas e misture com leite e manteiga para criar um purê.", "Num refratário, coloque a carne moída e cubra com o purê.", "Cubra com queijo e leve ao forno para gratinar."] },
-            { id: 13, title: "Macarrão ao Molho Pesto", category: "almoco", prepTime: "15 min", timeMinutes: 15, image: "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=800&q=80", ingredients: ["200g de macarrão penne", "1 xícara de folhas de manjericão", "1/2 xícara de azeite", "1 dente de alho", "50g de queijo parmesão"], instructions: ["Cozinhe a massa al dente.", "No processador, bata o manjericão, azeite, alho e parmesão.", "Misture o pesto diretamente sobre o macarrão quente."] },
-            { id: 14, title: "Frango Grelhado com Legumes", category: "saudavel", prepTime: "20 min", timeMinutes: 20, image: "https://images.unsplash.com/photo-1532550907401-a500c9a57435?auto=format&fit=crop&w=800&q=80", ingredients: ["2 filés de peito de frango", "1 abobrinha fatiada", "1 cenoura em rodelas", "Azeite, sal e ervas a gosto"], instructions: ["Tempere o frango com sal, limão e pimenta.", "Grelhe os filés na frigideira com azeite até dourarem.", "Na mesma frigideira, salteie os legumes com uma pitada de sal até ficarem macios."] },
-            { id: 15, title: "Risoto Simples de Queijo", category: "almoco", prepTime: "30 min", timeMinutes: 30, image: "https://images.unsplash.com/photo-1633964913295-ceb43826e7c9?auto=format&fit=crop&w=800&q=80", ingredients: ["1 xícara de arroz arbóreo", "1/2 xícara de vinho branco", "1 litro de caldo de legumes", "100g de queijo parmesão", "2 colheres de manteiga"], instructions: ["Refogue a cebola com manteiga e adicione o arroz.", "Adicione o vinho e mexa até evaporar.", "Vá adicionando o caldo quente aos poucos, mexendo sempre.", "Ao final, adicione a manteiga restante e o queijo parmesão."] },
-            { id: 16, title: "Omelete Recheada", category: "café", prepTime: "10 min", timeMinutes: 10, image: "https://images.unsplash.com/photo-1510693206972-df098062cb71?auto=format&fit=crop&w=800&q=80", ingredients: ["3 ovos", "1 tomate picado", "50g de presunto e queijo em cubos", "Sal, pimenta e orégano"], instructions: ["Bata os ovos com os temperos.", "Despeje na frigideira untada.", "Quando a base firmar, coloque o tomate, queijo e presunto num dos lados.", "Dobre a omelete ao meio e sirva."] },
-            { id: 17, title: "Feijoada Rápida", category: "almoco", prepTime: "45 min", timeMinutes: 45, image: "https://images.unsplash.com/photo-1541832676-9b763b0239ab?auto=format&fit=crop&w=800&q=80", ingredients: ["500g de feijão preto cozido", "200g de linguiça calabresa", "100g de bacon em cubos", "Alho e cebola picados", "Folha de louro"], instructions: ["Frite o bacon e a calabresa até dourarem.", "Refogue a cebola e o alho na mesma gordura.", "Junte o feijão cozido e o louro, deixando apurar por 15 minutos em fogo baixo."] },
-            { id: 18, title: "Salada Caesar com Frango", category: "saudavel", prepTime: "15 min", timeMinutes: 15, image: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800&q=80", ingredients: ["1 pé de alface americana", "200g de frango grelhado em tiras", "Croutons (pão torrado)", "Molho Caesar pronto"], instructions: ["Lave e rasgue as folhas de alface.", "Monte a salada colocando as folhas, o frango grelhado e os croutons.", "Finalize regando com o molho Caesar."] },
-            { id: 19, title: "Hambúrguer Caseiro", category: "almoco", prepTime: "20 min", timeMinutes: 20, image: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80", ingredients: ["180g de carne moída", "Pão de hambúrguer", "1 fatia de queijo cheddar", "Alface, tomate e sal"], instructions: ["Molde a carne em formato de hambúrguer.", "Grelhe em frigideira bem quente por 3-4 minutos de cada lado.", "Tempere com sal durante o cozimento.", "Derreta o queijo e monte no pão com os vegetais."] },
-            { id: 20, title: "Sopa de Legumes com Macarrão", category: "almoco", prepTime: "30 min", timeMinutes: 30, image: "https://images.unsplash.com/photo-1547592166-23ac45744acd?auto=format&fit=crop&w=800&q=80", ingredients: ["2 batatas em cubos", "1 cenoura fatiada", "1/2 xícara de macarrão para sopa", "1 litro de caldo vegetal"], instructions: ["Refogue os legumes com um pouco de azeite.", "Adicione a água e o caldo de carne e deixe ferver.", "Junte o macarrão e cozinhe por mais 8 minutos."] },
-            { id: 21, title: "Lasanha de Presunto e Queijo", category: "almoco", prepTime: "50 min", timeMinutes: 50, image: "https://images.unsplash.com/photo-1574894709920-11b28e7367e3?auto=format&fit=crop&w=800&q=80", ingredients: ["Massa para lasanha pré-cozida", "300g de presunto fatiado", "300g de queijo muçarela", "500ml de molho de tomate"], instructions: ["Faça uma camada de molho no refratário.", "Alterne camadas de massa, presunto, queijo e molho.", "Finalize com bastante queijo e asse a 180°C por 30 minutos."] },
-            { id: 22, title: "Peixe Assado no Forno", category: "saudavel", prepTime: "35 min", timeMinutes: 35, image: "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&w=800&q=80", ingredients: ["2 filés de tilápia", "1 limão", "2 batatas fatiadas", "Azeite, alho e sal"], instructions: ["Tempere o peixe com limão, alho e sal.", "Faça uma cama com as batatas na assadeira.", "Coloque o peixe por cima, regue com azeite e asse a 200°C por 25 minutos."] },
-
-            // Sobremesas (23-30)
-            { id: 23, title: "Cookies de Chocolate", category: "sobremesa", prepTime: "30 min", timeMinutes: 30, image: "https://images.unsplash.com/photo-1499636136210-6f4ee915583e?auto=format&fit=crop&w=800&q=80", ingredients: ["1/2 xícara de manteiga", "1/2 xícara de açúcar mascavo", "1 xícara de farinha de trigo", "1/2 xícara de gotas de chocolate"], instructions: ["Misture a manteiga com o açúcar até formar uma pasta.", "Adicione a farinha e por último as gotas de chocolate.", "Faça bolinhas e asse em forno a 180°C por 15 minutos."] },
-            { id: 24, title: "Brigadeiro Tradicional", category: "sobremesa", prepTime: "15 min", timeMinutes: 15, image: "https://images.unsplash.com/photo-1599785209707-a456fc1337bb?auto=format&fit=crop&w=800&q=80", ingredients: ["1 lata de leite condensado", "2 colheres de cacau em pó", "1 colher de manteiga", "Granulado de chocolate"], instructions: ["Misture todos os ingredientes numa panela.", "Cozinhe em fogo médio mexendo constantemente até soltar do fundo.", "Deixe esfriar, enrole e passe no granulado."] },
-            { id: 25, title: "Pudim de Leite Condensado", category: "sobremesa", prepTime: "60 min", timeMinutes: 60, image: "https://images.unsplash.com/photo-1528975604071-b4dc52a2d18c?auto=format&fit=crop&w=800&q=80", ingredients: ["1 lata de leite condensado", "1 lata de leite", "3 ovos", "1 xícara de açúcar para calda"], instructions: ["Derreta o açúcar na forma até virar caramelo.", "Bata no liquidificador o leite condensado, leite e ovos.", "Despeje na forma e asse em banho-maria por 50 minutos."] },
-            { id: 26, title: "Mousse de Maracujá", category: "sobremesa", prepTime: "10 min", timeMinutes: 10, image: "https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=800&q=80", ingredients: ["1 lata de leite condensado", "1 lata de creme de leite", "1 xícara de suco concentrado de maracujá"], instructions: ["Bata todos os ingredientes no liquidificador por 3 minutos.", "Despeje em taças e leve à geladeira por 2 horas."] },
-            { id: 27, title: "Brownie de Chocolate", category: "sobremesa", prepTime: "35 min", timeMinutes: 35, image: "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&w=800&q=80", ingredients: ["200g de chocolate meio amargo", "1/2 xícara de manteiga", "1 xícara de açúcar", "3/4 xícara de farinha de trigo"], instructions: ["Derreta o chocolate com a manteiga.", "Misture o açúcar e a farinha.", "Despeje em forma untada e asse por 25 minutos a 180°C."] },
-            { id: 28, title: "Bolo de Cenoura", category: "sobremesa", prepTime: "45 min", timeMinutes: 45, image: "https://images.unsplash.com/photo-1621303837174-89787a7d4729?auto=format&fit=crop&w=800&q=80", ingredients: ["3 cenouras médias", "1/2 xícara de óleo", "3 ovos", "2 xícaras de açúcar", "2 xícaras de farinha"], instructions: ["Bata a cenoura, o óleo e os ovos no liquidificador.", "Misture com a farinha e açúcar numa tigela.", "Asse por 40 minutos a 180°C."] },
-            { id: 29, title: "Salada de Frutas Frescas", category: "saudavel", prepTime: "15 min", timeMinutes: 15, image: "https://images.unsplash.com/photo-1490474418585-ba9bad8fd0ea?auto=format&fit=crop&w=800&q=80", ingredients: ["1 maçã", "1 banana", "1/2 mamão", "1 xícara de suco de laranja"], instructions: ["Pique todas as frutas em cubos pequenos.", "Misture-as em uma tigela grande e adicione o suco de laranja.", "Sirva gelado."] },
-            { id: 30, title: "Gelatina Colorida", category: "sobremesa", prepTime: "20 min", timeMinutes: 20, image: "https://images.unsplash.com/photo-1559181567-c3190ca9959b?auto=format&fit=crop&w=800&q=80", ingredients: ["2 pacotes de gelatina de sabores variados", "1 lata de leite condensado", "1 lata de creme de leite"], instructions: ["Prepare as gelatinas separadamente e corte em cubos.", "Bata no liquidificador o leite condensado com creme de leite.", "Misture os cubos com o creme e leve à geladeira."] }
+        // Base de Dados Inicial (30 receitas com imagens verificadas, incluindo brigadeiro correto)
+        let recipes = [
+            { id: 1, title: "Panquecas Americanas", category: "café", prepTime: "15 min", timeMinutes: 15, image: "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=600&auto=format&fit=crop", ingredients: ["1 xícara de farinha de trigo", "2 colheres de sopa de açúcar", "1 xícara de leite", "1 ovo", "1 colher de fermento"], instructions: ["Misture os ingredientes secos numa tigela.", "Adicione o leite e o ovo e bata até ficar homogêneo.", "Aqueça uma frigideira antiaderente e despeje pequenas porções.", "Vire quando surgirem bolhas e doure o outro lado."] },
+            { id: 2, title: "Ovos Mexidos Cremosos", category: "café", prepTime: "10 min", timeMinutes: 10, image: "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=600&auto=format&fit=crop", ingredients: ["3 ovos", "1 colher de manteiga", "2 colheres de creme de leite", "Sal e pimenta a gosto"], instructions: ["Bata os ovos levemente com um garfo.", "Derreta a manteiga em fogo baixo.", "Adicione os ovos e mexa continuamente com uma espátula.", "Desligue o fogo antes de secar totalmente e misture o creme de leite."] },
+            { id: 3, title: "Torrada com Abacate (Toast)", category: "café", prepTime: "8 min", timeMinutes: 8, image: "https://images.unsplash.com/photo-1588137378633-dea1336ce1e2?w=600&auto=format&fit=crop", ingredients: ["2 fatias de pão integral", "1 abacate maduro", "Azeite de oliva", "Suco de 1/2 limão", "Sal e pimenta"], instructions: ["Toste as fatias de pão até ficarem crocantes.", "Amasse o abacate com um garfo e tempere com limão, azeite, sal e pimenta.", "Espalhe o abacate sobre as torradas e sirva."] },
+            { id: 4, title: "Vitamina de Banana e Aveia", category: "café", prepTime: "5 min", timeMinutes: 5, image: "https://images.unsplash.com/photo-1553530666-ba11a7da3888?w=600&auto=format&fit=crop", ingredients: ["2 bananas maduras", "300ml de leite integral ou vegetal", "2 colheres de sopa de aveia", "1 colher de mel"], instructions: ["Corte as bananas em rodelas.", "Adicione todos os ingredientes no liquidificador.", "Bata por 2 minutos em velocidade alta até obter um creme homogêneo."] },
+            { id: 5, title: "Tapioca de Queijo e Presunto", category: "café", prepTime: "7 min", timeMinutes: 7, image: "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=600&auto=format&fit=crop", ingredients: ["3 colheres de massa pronta para tapioca", "2 fatias de queijo muçarela", "2 fatias de presunto", "Orégano"], instructions: ["Peneire a massa na frigideira bem aquecida.", "Espere a massa unir e adicione o queijo e o presunto.", "Polvilhe orégano, dobre ao meio e espere o queijo derreter."] },
+            { id: 6, title: "Crepioca FIT", category: "café", prepTime: "10 min", timeMinutes: 10, image: "https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=600&auto=format&fit=crop", ingredients: ["1 ovo", "2 colheres de massa de tapioca", "1 colher de requeijão light", "Sal a gosto"], instructions: ["Bata o ovo com a goma de tapioca e o sal em uma tigela.", "Despeje a mistura em frigideira aquecida.", "Doure dos dois lados e recheie com o requeijão."] },
+            { id: 7, title: "Iogurte com Granola e Frutas", category: "café", prepTime: "5 min", timeMinutes: 5, image: "https://images.unsplash.com/photo-1488477181946-6428a0291777?w=600&auto=format&fit=crop", ingredients: ["200g de iogurte natural", "1/2 xícara de granola", "Morangos e mirtilos", "Mel a gosto"], instructions: ["Coloque o iogurte no fundo de uma taça.", "Adicione a granola por cima.", "Decore com as frutas fatiadas e adicione um fio de mel."] },
+            { id: 8, title: "Pão de Queijo de Frigideira", category: "café", prepTime: "12 min", timeMinutes: 12, image: "https://images.unsplash.com/photo-1598103442097-8b74394b95c6?w=600&auto=format&fit=crop", ingredients: ["1 ovo", "2 colheres de polvilho azedo", "1 colher de requeijão", "50g de queijo ralado", "Pitada de sal"], instructions: ["Misture bem todos os ingredientes com um garfo.", "Despeje em frigideira untada em fogo baixo.", "Doure de um lado e depois vire para dourar o outro."] },
+            { id: 9, title: "Spaghetti à Carbonara", category: "almoco", prepTime: "25 min", timeMinutes: 25, image: "https://images.unsplash.com/photo-1612874742237-6526221588e3?w=600&auto=format&fit=crop", ingredients: ["200g de espaguete", "100g de bacon picado", "2 gemas de ovo", "50g de queijo parmesão", "Pimenta-do-reino"], instructions: ["Cozinhe o macarrão em água com sal.", "Frite o bacon até ficar crocante.", "Misture as gemas com o queijo ralado e pimenta numa tigela.", "Junte o macarrão quente ao bacon, desligue o fogo e incorpore a mistura de ovos."] },
+            { id: 10, title: "Strogonoff de Frango", category: "almoco", prepTime: "30 min", timeMinutes: 30, image: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=600&auto=format&fit=crop", ingredients: ["500g de peito de frango em cubos", "1 lata de creme de leite", "2 colheres de ketchup", "1 colher de mostarda", "1/2 cebola picada"], instructions: ["Refogue a cebola e doure o frango.", "Adicione a mostarda, o ketchup e os cogumelos se desejar.", "Desligue o fogo e misture o creme de leite.", "Sirva com arroz e batata palha."] },
+            { id: 11, title: "Arroz de Carreteiro Fácil", category: "almoco", prepTime: "35 min", timeMinutes: 35, image: "https://images.unsplash.com/photo-1512058564366-18510be2db19?w=600&auto=format&fit=crop", ingredients: ["2 xícaras de arroz", "200g de carne seca dessalgada", "1 linguiça calabresa", "Cebola e alho picados", "Cheiro-verde"], instructions: ["Frite a carne seca e a calabresa até dourarem.", "Adicione o alho, cebola e refogue.", "Junte o arroz, adicione água quente e cozinhe em fogo baixo.", "Finalize com cheiro-verde."] },
+            { id: 12, title: "Escondidinho de Carne Moída", category: "almoco", prepTime: "40 min", timeMinutes: 40, image: "https://images.unsplash.com/photo-1544025162-d76694265947?w=600&auto=format&fit=crop", ingredients: ["500g de batata cozida", "400g de carne moída", "Leite e manteiga", "100g de queijo muçarela"], instructions: ["Cozinhe a carne moída temperada a gosto.", "Amasse as batatas e misture com leite e manteiga para criar um purê.", "Num refratário, coloque a carne moída e cubra com o purê.", "Cubra com queijo e leve ao forno para gratinar."] },
+            { id: 13, title: "Macarrão ao Molho Pesto", category: "almoco", prepTime: "15 min", timeMinutes: 15, image: "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=600&auto=format&fit=crop", ingredients: ["200g de macarrão penne", "1 xícara de folhas de manjericão", "1/2 xícara de azeite", "1 dente de alho", "50g de queijo parmesão"], instructions: ["Cozinhe a massa al dente.", "No processador ou liquidificador, bata o manjericão, azeite, alho e parmesão.", "Misture o pesto diretamente sobre o macarrão quente."] },
+            { id: 14, title: "Frango Grelhado com Legumes", category: "almoco", prepTime: "20 min", timeMinutes: 20, image: "https://images.unsplash.com/photo-1532550907401-a500c9a57435?w=600&auto=format&fit=crop", ingredients: ["2 filés de peito de frango", "1 abobrinha fatiada", "1 cenoura em rodelas", "Azeite, sal e ervas a gosto"], instructions: ["Tempere o frango com sal, limão e pimenta.", "Grelhe os filés na frigideira com azeite até dourarem.", "Na mesma frigideira, salteie os legumes com uma pitada de sal até ficarem macios."] },
+            { id: 15, title: "Risoto Simples de Queijo", category: "almoco", prepTime: "30 min", timeMinutes: 30, image: "https://images.unsplash.com/photo-1633964913295-ceb43826e7c9?w=600&auto=format&fit=crop", ingredients: ["1 xícara de arroz arbóreo", "1/2 xícara de vinho branco", "1 litro de caldo de legumes", "100g de queijo parmesão", "2 colheres de manteiga"], instructions: ["Refogue a cebola com manteiga e adicione o arroz.", "Adicione o vinho e mexa até evaporar.", "Vá adicionando o caldo quente aos poucos, mexendo sempre.", "Ao final, adicione a manteiga restante e o queijo parmesão."] },
+            { id: 16, title: "Omelete Recheada", category: "almoco", prepTime: "10 min", timeMinutes: 10, image: "https://images.unsplash.com/photo-1510693206972-df098062cb71?w=600&auto=format&fit=crop", ingredients: ["3 ovos", "1 tomate picado", "50g de presunto e queijo em cubos", "Sal, pimenta e orégano"], instructions: ["Bata os ovos com os temperos.", "Despeje na frigideira untada.", "Quando a base firmar, coloque o tomate, queijo e presunto num dos lados.", "Dobre a omelete ao meio e sirva."] },
+            { id: 17, title: "Feijoada Rápida", category: "almoco", prepTime: "45 min", timeMinutes: 45, image: "https://images.unsplash.com/photo-1541832676-9b763b0239ab?w=600&auto=format&fit=crop", ingredients: ["500g de feijão preto cozido", "200g de linguiça calabresa", "100g de bacon em cubos", "Alho e cebola picados", "Folha de louro"], instructions: ["Frite o bacon e a calabresa até dourarem.", "Refogue a cebola e o alho na mesma gordura.", "Junte o feijão cozido e o louro, deixando apurar por 15 minutos em fogo baixo."] },
+            { id: 18, title: "Salada Caesar com Frango", category: "almoco", prepTime: "15 min", timeMinutes: 15, image: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=600&auto=format&fit=crop", ingredients: ["1 pé de alface americana", "200g de frango grelhado em tiras", "Croutons (pão torrado)", "Molho Caesar pronto ou maionese com limão"], instructions: ["Lave e rasgue as folhas de alface.", "Monte a salada colocando as folhas, o frango grelhado e os croutons.", "Finalize regando com o molho Caesar."] },
+            { id: 19, title: "Hambúrguer Caseiro", category: "almoco", prepTime: "20 min", timeMinutes: 20, image: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&auto=format&fit=crop", ingredients: ["180g de carne moída (patinho ou acém)", "Pão de hambúrguer", "1 fatia de queijo cheddar", "Alface, tomate e sal"], instructions: ["Molde a carne em formato de hambúrguer.", "Grelhe em frigideira bem quente com um fio de óleo por 3-4 minutos de cada lado.", "Tempere com sal durante o cozimento.", "Derreta o queijo no hambúrguer e monte no pão com os vegetais."] },
+            { id: 20, title: "Sopa de Legumes com Macarrão", category: "almoco", prepTime: "30 min", timeMinutes: 30, image: "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=600&auto=format&fit=crop", ingredients: ["2 batatas em cubos", "1 cenoura fatiada", "1/2 xícara de macarrão para sopa", "Caldo de carne", "1 litro de água"], instructions: ["Refogue os legumes com um pouco de azeite.", "Adicione a água e o caldo de carne e deixe ferver até os legumes amolecerem.", "Junte o macarrão e cozinhe por mais 8 minutos."] },
+            { id: 21, title: "Lasanha de Presunto e Queijo", category: "almoco", prepTime: "50 min", timeMinutes: 50, image: "https://images.unsplash.com/photo-1574894709920-11b28e7367e3?w=600&auto=format&fit=crop", ingredients: ["Massa para lasanha pré-cozida", "300g de presunto fatiado", "300g de queijo muçarela", "500ml de molho de tomate"], instructions: ["Em um refratário, faça uma camada de molho de tomate.", "Alterne camadas de massa, presunto, queijo e molho.", "Finalize com bastante queijo e leve ao forno a 180°C por 30 minutos."] },
+            { id: 22, title: "Peixe Assado no Forno", category: "almoco", prepTime: "35 min", timeMinutes: 35, image: "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=600&auto=format&fit=crop", ingredients: ["2 filés de peixe (tilápia ou merluza)", "1 limão", "2 batatas fatiadas", "Azeite, alho e sal"], instructions: ["Tempere o peixe com limão, alho e sal.", "Em uma assadeira, faça uma cama com as batatas fatiadas.", "Coloque o peixe por cima, regue com azeite e asse a 200°C por 25 minutos."] },
+            { id: 23, title: "Cookies de Chocolate", category: "sobremesa", prepTime: "30 min", timeMinutes: 30, image: "https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=600&auto=format&fit=crop", ingredients: ["1/2 xícara de manteiga", "1/2 xícara de açúcar mascavo", "1 xícara de farinha de trigo", "1/2 xícara de gotas de chocolate"], instructions: ["Misture a manteiga com o açúcar até formar uma pasta.", "Adicione a farinha e por último as gotas de chocolate.", "Faça bolinhas e asse em forno a 180°C por 15 minutos."] },
+            { id: 24, title: "Brigadeiro Tradicional", category: "sobremesa", prepTime: "15 min", timeMinutes: 15, image: "https://images.unsplash.com/photo-1579372786545-d24232daf58c?w=600&auto=format&fit=crop", ingredients: ["1 lata de leite condensado", "2 colheres de cacau em pó", "1 colher de manteiga", "Granulado de chocolate"], instructions: ["Misture todos os ingredientes numa panela.", "Cozinhe em fogo médio mexendo constantemente até soltar do fundo.", "Deixe esfriar, enrolar e passe no granulado."] },
+            { id: 25, title: "Pudim de Leite Condensado", category: "sobremesa", prepTime: "60 min", timeMinutes: 60, image: "https://images.unsplash.com/photo-1528975604071-b4dc52a2d18c?w=600&auto=format&fit=crop", ingredients: ["1 lata de leite condensado", "1 lata de leite (mesma medida)", "3 ovos", "1 xícara de açúcar para calda"], instructions: ["Derreta o açúcar na forma de pudim até virar caramelo.", "Bata no liquidificador o leite condensado, leite e ovos.", "Despeje na forma e asse em banho-maria por 50 minutos."] },
+            { id: 26, title: "Mousse de Maracujá", category: "sobremesa", prepTime: "10 min", timeMinutes: 10, image: "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=600&auto=format&fit=crop", ingredients: ["1 lata de leite condensado", "1 lata de creme de leite", "1 xícara de suco concentrado de maracujá"], instructions: ["Bata todos os ingredientes no liquidificador por 3 minutos.", "Despeje em taças e leve à geladeira por 2 horas antes de servir."] },
+            { id: 27, title: "Brownie de Chocolate", category: "sobremesa", prepTime: "35 min", timeMinutes: 35, image: "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=600&auto=format&fit=crop", ingredients: ["200g de chocolate meio amargo", "1/2 xícara de manteiga", "1 xícara de açúcar", "3/4 xícara de farinha de trigo"], instructions: ["Derreta o chocolate junto com a manteiga.", "Misture o açúcar e a farinha.", "Despeje em uma forma untada e asse por 25 minutos a 180°C."] },
+            { id: 28, title: "Bolo de Cenoura", category: "sobremesa", prepTime: "45 min", timeMinutes: 45, image: "https://images.unsplash.com/photo-1621303837174-89787a7d4729?w=600&auto=format&fit=crop", ingredients: ["3 cenouras médias", "1/2 xícara de óleo", "3 ovos", "2 xícaras de açúcar", "2 xícaras de farinha de trigo"], instructions: ["Bata a cenoura, o óleo e os ovos no liquidificador.", "Misture a massa com a farinha e açúcar numa tigela.", "Asse por 40 minutos a 180°C."] },
+            { id: 29, title: "Salada de Frutas Frescas", category: "sobremesa", prepTime: "15 min", timeMinutes: 15, image: "https://images.unsplash.com/photo-1490474418585-ba9bad8fd0ea?w=600&auto=format&fit=crop", ingredients: ["1 maçã", "1 banana", "1/2 mamão", "1 xícara de suco de laranja"], instructions: ["Pique todas as frutas em cubos pequenos.", "Misture-as em uma tigela grande e adicione o suco de laranja.", "Sirva gelado."] },
+            { id: 30, title: "Gelatina Colorida", category: "sobremesa", prepTime: "20 min", timeMinutes: 20, image: "https://images.unsplash.com/photo-1559181567-c3190ca9959b?w=600&auto=format&fit=crop", ingredients: ["2 pacotes de gelatina de sabores variados", "1 lata de leite condensado", "1 lata de creme de leite"], instructions: ["Prepare as gelatinas separadamente e corte em cubos.", "Bata no liquidificador o leite condensado com creme de leite.", "Misture os cubos de gelatina com o creme e leve à geladeira."] }
         ];
 
-        // GLOBAL APP STATE
-        window.recipes = [...defaultRecipes];
-        window.favorites = JSON.parse(localStorage.getItem('recipe_favorites')) || [];
-        window.currentUser = null;
-        window.onlyFavorites = false;
-        window.currentServingMultiplier = 1;
+        let favorites = JSON.parse(localStorage.getItem('recipe_favorites')) || [];
+        let activeFilterOnlyFavs = false;
+        let currentServings = 2;
+        let currentUser = null;
 
-        // AUTH INITIALIZATION
-        async function initAuth() {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (err) {
-                console.warn("Auth initialization fallback:", err);
-            }
-        }
-        initAuth();
+        // Estado de Autenticação Firebase
+        auth.onAuthStateChanged(user => {
+            currentUser = user;
+            const authContainer = document.getElementById("authContainer");
+            const adminBtn = document.getElementById("adminBtn");
 
-        onAuthStateChanged(auth, (user) => {
             if (user) {
-                window.currentUser = {
-                    uid: user.uid,
-                    name: user.displayName || user.email?.split('@')[0] || 'Visitante',
-                    email: user.email || 'Anônimo',
-                    isAdmin: window.currentUser ? window.currentUser.isAdmin : false
-                };
+                authContainer.innerHTML = `<button onclick="handleLogout()" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg font-medium transition">Sair (${user.email})</button>`;
+                adminBtn.classList.remove("hidden");
+            } else {
+                authContainer.innerHTML = `<button onclick="openAuthModal()" class="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-700 transition">Entrar / Admin</button>`;
+                adminBtn.classList.add("hidden");
             }
-            updateUserUI();
-            listenFirestoreData();
         });
 
-        // FIRESTORE SYNC & DATA LISTENERS
-        function listenFirestoreData() {
-            if (!auth.currentUser) return;
-            const recipesRef = collection(db, 'artifacts', appId, 'public', 'data', 'recipes');
-            
-            onSnapshot(recipesRef, (snapshot) => {
-                if (!snapshot.empty) {
-                    const firestoreRecipes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    window.recipes = [...defaultRecipes, ...firestoreRecipes];
-                }
-                filterRecipes();
-            }, (error) => {
-                console.log("Modo offline ativado ou permissão de rede:", error);
-                filterRecipes();
-            });
+        function openAuthModal() { document.getElementById("authModal").classList.remove("hidden"); document.getElementById("authModal").classList.add("flex"); }
+        function closeAuthModal() { document.getElementById("authModal").classList.add("hidden"); document.getElementById("authModal").classList.remove("flex"); }
+        function openAdminModal() { document.getElementById("adminModal").classList.remove("hidden"); document.getElementById("adminModal").classList.add("flex"); }
+        function closeAdminModal() { document.getElementById("adminModal").classList.add("hidden"); document.getElementById("adminModal").classList.remove("flex"); }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById("loginEmail").value;
+            const pass = document.getElementById("loginPassword").value;
+            auth.signInWithEmailAndPassword(email, pass)
+                .then(() => { closeAuthModal(); alert("Login realizado com sucesso!"); })
+                .catch(err => alert("Erro ao entrar: " + err.message));
         }
 
-        // AUTH HANDLERS
-        window.loginWithGoogle = async () => {
-            try {
-                const provider = new GoogleAuthProvider();
-                const result = await signInWithPopup(auth, provider);
-                window.currentUser = {
-                    uid: result.user.uid,
-                    name: result.user.displayName,
-                    email: result.user.email,
-                    isAdmin: false
-                };
-                updateUserUI();
-                closeModal('modal-auth');
-            } catch (error) {
-                console.error("Erro no login Google:", error);
-            }
-        };
+        function handleLogout() { auth.signOut(); }
 
-        window.loginAnonymously = async () => {
-            try {
-                await signInAnonymously(auth);
-                closeModal('modal-auth');
-            } catch (error) {
-                console.error("Erro no login anônimo:", error);
-            }
-        };
-
-        window.handleAuthSubmit = (e) => {
+        function saveNewRecipe(e) {
             e.preventDefault();
-            const email = document.getElementById('auth-email').value;
-            const isAdmin = document.getElementById('auth-is-admin').checked;
-
-            window.currentUser = {
-                uid: auth.currentUser?.uid || 'user-' + Date.now(),
-                email: email,
-                name: email.split('@')[0],
-                isAdmin: isAdmin
+            const newRecipe = {
+                id: Date.now(),
+                title: document.getElementById("newTitle").value,
+                category: document.getElementById("newCategory").value,
+                prepTime: document.getElementById("newPrepTime").value,
+                timeMinutes: parseInt(document.getElementById("newPrepTime").value) || 20,
+                image: document.getElementById("newImage").value,
+                ingredients: document.getElementById("newIngredients").value.split("\n").filter(i => i.trim() !== ""),
+                instructions: document.getElementById("newInstructions").value.split("\n").filter(i => i.trim() !== "")
             };
 
-            updateUserUI();
-            closeModal('modal-auth');
+            recipes.unshift(newRecipe);
+            closeAdminModal();
             filterRecipes();
-        };
-
-        window.logout = async () => {
-            await signOut(auth);
-            window.currentUser = null;
-            updateUserUI();
-            filterRecipes();
-        };
-
-        function updateUserUI() {
-            const btnAuth = document.getElementById('btn-auth-open');
-            const profile = document.getElementById('user-profile');
-            const btnAdd = document.getElementById('btn-add-recipe');
-
-            if (window.currentUser) {
-                btnAuth.classList.add('hidden');
-                profile.classList.remove('hidden');
-                document.getElementById('user-name-display').textContent = window.currentUser.name;
-                document.getElementById('user-badge').textContent = window.currentUser.isAdmin ? 'Admin' : 'Membro';
-
-                if (window.currentUser.isAdmin) {
-                    btnAdd.classList.remove('hidden');
-                } else {
-                    btnAdd.classList.add('hidden');
-                }
-            } else {
-                btnAuth.classList.remove('hidden');
-                profile.classList.add('hidden');
-                btnAdd.classList.add('hidden');
-            }
+            alert("Receita adicionada com sucesso!");
         }
 
-        // CATALOG & FILTERS
-        window.showCatalogView = () => {
-            document.getElementById('view-catalog').classList.remove('hidden');
-            document.getElementById('view-detail').classList.add('hidden');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        };
+        function updateFavCount() {
+            document.getElementById("favCount").textContent = favorites.length;
+        }
 
-        window.showDetailView = (recipeId) => {
-            const recipe = window.recipes.find(r => String(r.id) === String(recipeId));
-            if (!recipe) return;
+        function toggleFavorite(id, event) {
+            if (event) event.stopPropagation();
+            if (favorites.includes(id)) {
+                favorites = favorites.filter(favId => favId !== id);
+            } else {
+                favorites.push(id);
+            }
+            localStorage.setItem('recipe_favorites', JSON.stringify(favorites));
+            updateFavCount();
+            filterRecipes();
+        }
 
-            window.currentServingMultiplier = 1;
-            renderDetailCard(recipe);
-            
-            document.getElementById('view-catalog').classList.add('hidden');
-            document.getElementById('view-detail').classList.remove('hidden');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        };
-
-        window.filterRecipes = () => {
-            const search = document.getElementById('searchInput').value.toLowerCase();
-            const category = document.getElementById('categoryFilter').value;
-            const time = document.getElementById('timeFilter').value;
-
-            const filtered = window.recipes.filter(r => {
-                const matchesSearch = r.title.toLowerCase().includes(search) || r.ingredients.some(i => i.toLowerCase().includes(search));
-                const matchesCategory = category === 'tudo' || r.category === category;
-                const matchesFav = !window.onlyFavorites || window.favorites.includes(String(r.id));
-                
-                let matchesTime = true;
-                if (time === 'quick') matchesTime = r.timeMinutes <= 15;
-                if (time === 'medium') matchesTime = r.timeMinutes > 15 && r.timeMinutes <= 30;
-                if (time === 'long') matchesTime = r.timeMinutes > 30;
-
-                return matchesSearch && matchesCategory && matchesFav && matchesTime;
-            });
-
-            displayRecipes(filtered);
-        };
+        function toggleFavFilter() {
+            activeFilterOnlyFavs = !activeFilterOnlyFavs;
+            const btn = document.getElementById("showFavsBtn");
+            if (activeFilterOnlyFavs) {
+                btn.classList.add("bg-orange-600", "text-white");
+                btn.classList.remove("bg-orange-50", "text-orange-600");
+            } else {
+                btn.classList.remove("bg-orange-600", "text-white");
+                btn.classList.add("bg-orange-50", "text-orange-600");
+            }
+            filterRecipes();
+        }
 
         function displayRecipes(list) {
-            const grid = document.getElementById('recipeGrid');
-            grid.innerHTML = '';
-
+            const grid = document.getElementById("recipeGrid");
+            grid.innerHTML = "";
             if (list.length === 0) {
-                grid.innerHTML = `
-                    <div class="col-span-full text-center py-12 bg-white rounded-3xl border border-slate-200">
-                        <i class="fa-solid fa-utensils text-slate-300 text-4xl mb-3"></i>
-                        <h4 class="font-bold text-slate-700">Nenhuma receita encontrada</h4>
-                        <p class="text-xs text-slate-400">Tente alterar seus parâmetros de busca ou categoria.</p>
-                    </div>
-                `;
+                grid.innerHTML = `<div class="col-span-full text-center py-12 text-gray-500">Nenhuma receita encontrada.</div>`;
                 return;
             }
 
             list.forEach(recipe => {
-                const isFav = window.favorites.includes(String(recipe.id));
-                const isAdmin = window.currentUser && window.currentUser.isAdmin;
-
-                const card = document.createElement('div');
-                card.className = 'group bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition overflow-hidden flex flex-col justify-between cursor-pointer';
-                card.onclick = () => showDetailView(recipe.id);
+                const isFav = favorites.includes(recipe.id);
+                const card = document.createElement("div");
+                card.className = "bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition cursor-pointer flex flex-col group";
+                card.onclick = () => showRecipeDetails(recipe.id);
 
                 card.innerHTML = `
-                    <div>
-                        <div class="relative h-48 w-full overflow-hidden bg-slate-100">
-                            <img src="${recipe.image}" alt="${recipe.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" onerror="this.src='https://images.unsplash.com/photo-1495521821757-a1efb6729352?w=600'">
-                            <button onclick="toggleFavorite('${recipe.id}', event)" class="absolute top-3 right-3 p-2 rounded-full bg-white/80 backdrop-blur-md text-slate-600 hover:text-rose-500 transition shadow-sm">
-                                <i class="fa-solid fa-heart text-xs ${isFav ? 'text-rose-500' : 'text-slate-400'}"></i>
-                            </button>
-                            <span class="absolute bottom-3 left-3 px-2.5 py-1 rounded-lg bg-slate-900/80 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider">${recipe.category}</span>
-                        </div>
-                        <div class="p-4 space-y-2">
-                            <h3 class="font-bold text-slate-900 group-hover:text-brand-600 transition text-sm line-clamp-1">${recipe.title}</h3>
-                            <div class="flex items-center gap-3 text-xs text-slate-500 font-medium">
-                                <span class="flex items-center gap-1"><i class="fa-regular fa-clock"></i> ${recipe.prepTime}</span>
-                                <span class="flex items-center gap-1"><i class="fa-solid fa-list-check"></i> ${recipe.ingredients.length} ingred.</span>
-                            </div>
-                        </div>
+                    <div class="relative h-48 overflow-hidden bg-gray-100">
+                        <img src="${recipe.image}" alt="${recipe.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                        <button onclick="toggleFavorite(${recipe.id}, event)" class="absolute top-3 right-3 w-9 h-9 bg-white/90 backdrop-blur rounded-full flex items-center justify-center text-gray-600 hover:text-red-500 shadow transition">
+                            <i class="${isFav ? 'fa-solid text-red-500' : 'fa-regular'} fa-heart"></i>
+                        </button>
                     </div>
-                    ${isAdmin ? `
-                    <div class="px-4 py-2 bg-slate-50 border-t border-slate-100 flex justify-end gap-2 no-print">
-                        <button onclick="deleteRecipe('${recipe.id}', event)" class="text-[10px] font-bold text-rose-600 hover:underline">Excluir</button>
-                    </div>` : ''}
+                    <div class="p-4 flex flex-col flex-grow">
+                        <span class="text-xs font-semibold text-orange-600 uppercase tracking-wider mb-1">${recipe.category}</span>
+                        <h3 class="font-bold text-gray-900 text-base mb-2 line-clamp-1">${recipe.title}</h3>
+                        <div class="mt-auto flex items-center text-xs text-gray-500"><i class="fa-regular fa-clock mr-1.5"></i> ${recipe.prepTime}</div>
+                    </div>
                 `;
                 grid.appendChild(card);
             });
         }
 
-        // FAVORITES MANAGING
-        window.toggleFavorite = (id, e) => {
-            if (e) e.stopPropagation();
-            const idStr = String(id);
-            if (window.favorites.includes(idStr)) {
-                window.favorites = window.favorites.filter(favId => favId !== idStr);
-            } else {
-                window.favorites.push(idStr);
-            }
-            localStorage.setItem('recipe_favorites', JSON.stringify(window.favorites));
-            updateFavCount();
-            filterRecipes();
-        };
+        function filterRecipes() {
+            const search = document.getElementById("searchInput").value.toLowerCase();
+            const cat = document.getElementById("categoryFilter").value;
+            const time = document.getElementById("timeFilter").value;
 
-        window.toggleFavoritesFilter = () => {
-            window.onlyFavorites = !window.onlyFavorites;
-            const btn = document.getElementById('btn-favs-filter');
-            if (window.onlyFavorites) {
-                btn.classList.add('bg-rose-50', 'text-rose-600', 'border-rose-200');
-            } else {
-                btn.classList.remove('bg-rose-50', 'text-rose-600', 'border-rose-200');
-            }
-            filterRecipes();
-        };
-
-        function updateFavCount() {
-            document.getElementById('fav-count').textContent = window.favorites.length;
+            const filtered = recipes.filter(r => {
+                const matchSearch = r.title.toLowerCase().includes(search) || r.ingredients.some(i => i.toLowerCase().includes(search));
+                const matchCat = cat === "tudo" || r.category === cat;
+                const matchFav = !activeFilterOnlyFavs || favorites.includes(r.id);
+                let matchTime = true;
+                if (time === "quick") matchTime = r.timeMinutes <= 15;
+                if (time === "medium") matchTime = r.timeMinutes > 15 && r.timeMinutes <= 30;
+                if (time === "long") matchTime = r.timeMinutes > 30;
+                return matchSearch && matchCat && matchFav && matchTime;
+            });
+            displayRecipes(filtered);
         }
-        updateFavCount();
 
-        // RECIPE DETAIL DISPLAY & PORTION SCALER
+        function formatIngredient(str, mult) {
+            return str.replace(/(\d+[\/\d\.]*)/g, (match) => {
+                let val = parseFloat(match);
+                if (isNaN(val)) return match;
+                let calc = (val * (mult / 2)).toFixed(1);
+                return calc.endsWith('.0') ? parseInt(calc) : calc;
+            });
+        }
+
+        function showRecipeDetails(id) {
+            const recipe = recipes.find(r => r.id === id);
+            if (!recipe) return;
+            currentServings = 2;
+
+            document.getElementById("catalogView").classList.add("hidden");
+            document.getElementById("detailView").classList.remove("hidden");
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            renderDetailCard(recipe);
+            renderRelated(recipe);
+        }
+
         function renderDetailCard(recipe) {
-            const container = document.getElementById('recipeDetailCard');
-            const isFav = window.favorites.includes(String(recipe.id));
+            const container = document.getElementById("mainRecipeContent");
+            const isFav = favorites.includes(recipe.id);
 
             container.innerHTML = `
-                <div class="relative h-72 sm:h-96 w-full">
-                    <img src="${recipe.image}" class="w-full h-full object-cover" alt="${recipe.title}">
-                    <div class="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent flex items-end p-6 sm:p-8">
-                        <div class="text-white space-y-2">
-                            <span class="px-3 py-1 bg-brand-600 rounded-lg text-xs font-bold uppercase tracking-wider">${recipe.category}</span>
-                            <h1 class="text-2xl sm:text-4xl font-extrabold">${recipe.title}</h1>
-                            <p class="text-xs text-slate-300 flex items-center gap-2">
-                                <i class="fa-regular fa-clock"></i> ${recipe.prepTime} de preparo
-                            </p>
-                        </div>
+                <div class="relative h-72 sm:h-96 rounded-xl overflow-hidden mb-6 bg-gray-100">
+                    <img src="${recipe.image}" alt="${recipe.title}" class="w-full h-full object-cover">
+                    <button onclick="toggleFavorite(${recipe.id}, event); renderDetailCard(recipes.find(r => r.id === ${recipe.id}))" class="absolute top-4 right-4 w-11 h-11 bg-white/90 backdrop-blur rounded-full flex items-center justify-center text-gray-700 hover:text-red-500 shadow-md transition">
+                        <i class="${isFav ? 'fa-solid text-red-500' : 'fa-regular'} fa-heart text-lg"></i>
+                    </button>
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+                    <span class="text-xs font-semibold text-orange-600 uppercase tracking-wider bg-orange-50 px-3 py-1 rounded-full">${recipe.category}</span>
+                    <span class="text-sm text-gray-500"><i class="fa-regular fa-clock mr-1"></i> ${recipe.prepTime}</span>
+                </div>
+                <h1 class="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-6">${recipe.title}</h1>
+                
+                <!-- Ajuste de Porções -->
+                <div class="bg-orange-50/50 border border-orange-100 p-4 rounded-xl flex items-center justify-between mb-6">
+                    <span class="text-sm font-medium text-gray-700">Porções:</span>
+                    <div class="flex items-center space-x-3">
+                        <button onclick="changeServings(${recipe.id}, -1)" class="w-8 h-8 bg-white border border-gray-200 rounded-lg font-bold text-gray-700 hover:bg-gray-50">-</button>
+                        <span id="servingsCount" class="font-bold text-gray-900">${currentServings}</span>
+                        <button onclick="changeServings(${recipe.id}, 1)" class="w-8 h-8 bg-white border border-gray-200 rounded-lg font-bold text-gray-700 hover:bg-gray-50">+</button>
                     </div>
                 </div>
 
-                <div class="p-6 sm:p-8 space-y-8">
-                    <!-- Controls Bar -->
-                    <div class="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-slate-100 no-print">
-                        <!-- Portions Scaler -->
-                        <div class="flex items-center gap-3">
-                            <span class="text-xs font-bold text-slate-700 uppercase">Porções Multiplicador:</span>
-                            <div class="flex items-center gap-1 bg-slate-100 rounded-xl p-1 border border-slate-200">
-                                <button onclick="adjustServings('${recipe.id}', -0.5)" class="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-slate-700 font-bold hover:bg-slate-200 shadow-sm">-</button>
-                                <span id="servings-count" class="px-3 text-xs font-extrabold text-slate-800">${window.currentServingMultiplier}x</span>
-                                <button onclick="adjustServings('${recipe.id}', 0.5)" class="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-slate-700 font-bold hover:bg-slate-200 shadow-sm">+</button>
-                            </div>
-                        </div>
-
-                        <!-- Action Buttons -->
-                        <div class="flex gap-2">
-                            <button onclick="window.print()" class="px-3.5 py-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold flex items-center gap-1.5 transition">
-                                <i class="fa-solid fa-print"></i> Imprimir Receita
-                            </button>
-                            <button onclick="toggleFavorite('${recipe.id}')" class="px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold flex items-center gap-1.5 transition ${isFav ? 'bg-rose-50 text-rose-600 border-rose-200' : 'text-slate-700 hover:bg-slate-50'}">
-                                <i class="fa-solid fa-heart ${isFav ? 'text-rose-500' : ''}"></i> ${isFav ? 'Favoritado' : 'Favoritar'}
-                            </button>
-                        </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center"><i class="fa-solid fa-basket-shopping text-orange-600 mr-2"></i> Ingredientes</h3>
+                        <ul class="space-y-2.5 text-gray-700 text-sm">
+                            ${recipe.ingredients.map(i => `<li class="flex items-start"><span class="w-2 h-2 bg-orange-500 rounded-full mt-2 mr-2.5 flex-shrink-0"></span><span>${formatIngredient(i, currentServings)}</span></li>`).join('')}
+                        </ul>
                     </div>
-
-                    <!-- Recipe Content Grid -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        <!-- Ingredients List -->
-                        <div class="space-y-4">
-                            <h3 class="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                                <i class="fa-solid fa-basket-shopping text-brand-600"></i> Ingredientes
-                            </h3>
-                            <ul id="ingredients-list" class="space-y-2 text-xs text-slate-700">
-                                ${recipe.ingredients.map(ing => `<li class="flex items-start gap-2 py-1.5 border-b border-slate-100"><span class="w-1.5 h-1.5 rounded-full bg-brand-500 mt-1.5"></span><span>${scaleIngredient(ing, window.currentServingMultiplier)}</span></li>`).join('')}
-                            </ul>
-                        </div>
-
-                        <!-- Preparation Steps -->
-                        <div class="md:col-span-2 space-y-4">
-                            <h3 class="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                                <i class="fa-solid fa-list-ol text-brand-600"></i> Modo de Preparo
-                            </h3>
-                            <ol class="space-y-4 text-xs text-slate-700">
-                                ${recipe.instructions.map((step, idx) => `
-                                    <li class="flex gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                                        <span class="w-6 h-6 rounded-xl bg-brand-600 text-white font-extrabold flex items-center justify-center shrink-0 text-[11px]">${idx + 1}</span>
-                                        <p class="leading-relaxed pt-0.5">${step}</p>
-                                    </li>
-                                `).join('')}
-                            </ol>
-                        </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center"><i class="fa-solid fa-list-ol text-orange-600 mr-2"></i> Modo de Preparo</h3>
+                        <ol class="space-y-4 text-gray-700 text-sm">
+                            ${recipe.instructions.map((ins, idx) => `<li class="flex items-start"><span class="font-bold text-orange-600 mr-3 flex-shrink-0">${idx + 1}.</span><span>${ins}</span></li>`).join('')}
+                        </ol>
                     </div>
                 </div>
             `;
         }
 
-        function scaleIngredient(ingredientStr, multiplier) {
-            return ingredientStr.replace(/(\d+[\/\d\.]*)/g, (match) => {
-                let val = parseFloat(match);
-                if (isNaN(val)) return match;
-                let calculated = (val * multiplier).toFixed(1);
-                return calculated.endsWith('.0') ? parseInt(calculated) : calculated;
+        function changeServings(id, delta) {
+            currentServings = Math.max(1, currentServings + delta);
+            const recipe = recipes.find(r => r.id === id);
+            if (recipe) renderDetailCard(recipe);
+        }
+
+        function renderRelated(recipe) {
+            const list = document.getElementById("relatedList");
+            list.innerHTML = "";
+            const related = recipes.filter(r => r.category === recipe.category && r.id !== recipe.id).slice(0, 3);
+            
+            if (related.length === 0) {
+                list.innerHTML = `<p class="text-sm text-gray-500">Nenhuma outra receita relacionada.</p>`;
+                return;
+            }
+
+            related.forEach(rel => {
+                const item = document.createElement("div");
+                item.className = "flex items-center space-x-3 bg-white p-3 rounded-xl border border-gray-100 hover:shadow-sm transition cursor-pointer";
+                item.onclick = () => showRecipeDetails(rel.id);
+                item.innerHTML = `
+                    <img src="${rel.image}" alt="${rel.title}" class="w-16 h-16 object-cover rounded-lg flex-shrink-0">
+                    <div>
+                        <h4 class="font-bold text-gray-900 text-sm line-clamp-1">${rel.title}</h4>
+                        <span class="text-xs text-gray-500">${rel.prepTime}</span>
+                    </div>
+                `;
+                list.appendChild(item);
             });
         }
 
-        window.adjustServings = (recipeId, delta) => {
-            if (window.currentServingMultiplier + delta >= 0.5) {
-                window.currentServingMultiplier += delta;
-                const recipe = window.recipes.find(r => String(r.id) === String(recipeId));
-                renderDetailCard(recipe);
-            }
-        };
+        function goHome() {
+            document.getElementById("detailView").classList.add("hidden");
+            document.getElementById("catalogView").classList.remove("hidden");
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
 
-        // ADMIN CREATE & DELETE RECIPES
-        window.openRecipeFormModal = () => {
-            document.getElementById('recipeForm').reset();
-            document.getElementById('form-recipe-id').value = '';
-            document.getElementById('recipe-form-title').textContent = 'Adicionar Nova Receita';
-            openModal('modal-recipe-form');
-        };
-
-        window.handleSaveRecipe = async (e) => {
-            e.preventDefault();
-            const title = document.getElementById('form-title').value;
-            const category = document.getElementById('form-category').value;
-            const prepTime = document.getElementById('form-time').value + ' min';
-            const timeMinutes = parseInt(document.getElementById('form-time').value);
-            const image = document.getElementById('form-image').value;
-            const ingredients = document.getElementById('form-ingredients').value.split('\n').filter(i => i.trim() !== '');
-            const instructions = document.getElementById('form-instructions').value.split('\n').filter(i => i.trim() !== '');
-
-            const newRecipe = {
-                id: 'rec-' + Date.now(),
-                title,
-                category,
-                prepTime,
-                timeMinutes,
-                image,
-                ingredients,
-                instructions
-            };
-
-            // Local state push
-            window.recipes.unshift(newRecipe);
-
-            // Firestore sync if authorized
-            if (auth.currentUser) {
-                try {
-                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'recipes', newRecipe.id);
-                    await setDoc(docRef, newRecipe);
-                } catch (err) {
-                    console.log("Salvo localmente (sem permissão gravável de cloud):", err);
-                }
-            }
-
-            closeModal('modal-recipe-form');
-            filterRecipes();
-        };
-
-        window.deleteRecipe = async (id, e) => {
-            e.stopPropagation();
-            if (confirm('Deseja realmente remover esta receita?')) {
-                const idStr = String(id);
-                window.recipes = window.recipes.filter(r => String(r.id) !== idStr);
-
-                if (auth.currentUser) {
-                    try {
-                        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'recipes', idStr);
-                        await deleteDoc(docRef);
-                    } catch (err) {
-                        console.log("Removido da sessão ativa:", err);
-                    }
-                }
-                filterRecipes();
-            }
-        };
-
-        // UI HELPERS
-        window.openModal = (id) => document.getElementById(id).classList.remove('hidden');
-        window.closeModal = (id) => document.getElementById(id).classList.add('hidden');
+        // Inicialização
+        updateFavCount();
+        filterRecipes();
     </script>
 </body>
 </html>
