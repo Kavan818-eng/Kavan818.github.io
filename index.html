@@ -103,7 +103,7 @@
         </div>
     </div>
 
-    <!-- Modal Adicionar / Editar Receita -->
+    <!-- Modal Adicionar Receita -->
     <div id="adminModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
         <div class="bg-white rounded-2xl max-w-xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
             <button onclick="closeAdminModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
@@ -123,7 +123,7 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Tempo (ex: 20 min)</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Tempo (ex: 20 min, 1h)</label>
                         <input type="text" id="newPrepTime" required class="w-full px-3 py-2 border rounded-lg text-sm">
                     </div>
                 </div>
@@ -139,7 +139,7 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">Instruções (uma por linha)</label>
                     <textarea id="newInstructions" rows="4" required class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Misture os ingredientes..."></textarea>
                 </div>
-                <button id="saveRecipeBtn" type="submit" class="w-full bg-orange-600 text-white py-2.5 rounded-lg font-medium hover:bg-orange-700 transition text-sm">Salvar Receita</button>
+                <button id="saveRecipeBtn" type="submit" class="w-full bg-orange-600 text-white py-2.5 rounded-lg font-medium hover:bg-orange-700 transition text-sm disabled:opacity-60">Salvar Receita</button>
             </form>
         </div>
     </div>
@@ -159,14 +159,15 @@
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
+        const recipesRef = db.collection("recipes");
 
         db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
-        
+
         let pendingWrites = 0;
         window.addEventListener("beforeunload", e => {
             if (pendingWrites > 0) { e.preventDefault(); e.returnValue = ""; }
         });
-        
+
         function showToast(msg, isError) {
             let t = document.getElementById("toast");
             if (!t) {
@@ -180,8 +181,8 @@
             t.style.display = "block";
             clearTimeout(t._timer);
             t._timer = setTimeout(() => { t.style.display = "none"; }, isError ? 7000 : 3000);
-        } 
-        
+        }
+
         const CATEGORY_LABELS = { "café": "Café da Manhã", "almoco": "Almoço e Jantar", "sobremesa": "Sobremesa" };
         const CATEGORY_EMOJI = { "café": "🥞", "almoco": "🍝", "sobremesa": "🍰" };
 
@@ -205,32 +206,84 @@
             return `<img src="${esc(src)}" alt="${esc(recipe.title)}" class="${cls}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='${fb}'">`;
         }
 
+        // Converts "20 min", "1h", "1h30", "45" into minutes
+        function parseMinutes(text) {
+            const s = String(text || "").toLowerCase().replace(",", ".");
+            const h = s.match(/(\d+(?:\.\d+)?)\s*h/);
+            const m = s.match(/(\d+)\s*(?:min|m\b)/);
+            let total = 0;
+            if (h) total += parseFloat(h[1]) * 60;
+            if (m) total += parseInt(m[1], 10);
+            if (!h && !m) {
+                const n = s.match(/\d+/);
+                if (n) total = parseInt(n[0], 10);
+            }
+            return Math.round(total) || 20;
+        }
+
         const defaultRecipes = [
-            { id: 1, title: "Panquecas Americanas", category: "café", prepTime: "15 min", timeMinutes: 15, image: "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445", ingredients: ["1 xícara de farinha de trigo", "2 colheres de sopa de açúcar", "1 xícara de leite", "1 ovo", "1 colher de fermento"], instructions: ["Misture os ingredientes secos numa tigela.", "Adicione o leite e o ovo e bata até ficar homogêneo.", "Aqueça uma frigideira antiaderente e despeje pequenas porções.", "Vire quando surgirem bolhas e doure o outro lado."] },
-            { id: 2, title: "Ovos Mexidos Cremosos", category: "café", prepTime: "10 min", timeMinutes: 10, image: "https://images.unsplash.com/photo-1525351484163-7529414344d8", ingredients: ["3 ovos", "1 colher de manteiga", "2 colheres de creme de leite", "Sal e pimenta a gosto"], instructions: ["Bata os ovos levemente com um garfo.", "Derreta a manteiga em fogo baixo.", "Adicione os ovos e mexa continuamente com uma espátula.", "Desligue o fogo antes de secar totalmente e misture o creme de leite."] }
+            { id: "1", title: "Panquecas Americanas", category: "café", prepTime: "15 min", timeMinutes: 15, image: "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445", ingredients: ["1 xícara de farinha de trigo", "2 colheres de sopa de açúcar", "1 xícara de leite", "1 ovo", "1 colher de fermento"], instructions: ["Misture os ingredientes secos numa tigela.", "Adicione o leite e o ovo e bata até ficar homogêneo.", "Aqueça uma frigideira antiaderente e despeje pequenas porções.", "Vire quando surgirem bolhas e doure o outro lado."] },
+            { id: "2", title: "Ovos Mexidos Cremosos", category: "café", prepTime: "10 min", timeMinutes: 10, image: "https://images.unsplash.com/photo-1525351484163-7529414344d8", ingredients: ["3 ovos", "1 colher de manteiga", "2 colheres de creme de leite", "Sal e pimenta a gosto"], instructions: ["Bata os ovos levemente com um garfo.", "Derreta a manteiga em fogo baixo.", "Adicione os ovos e mexa continuamente com uma espátula.", "Desligue o fogo antes de secar totalmente e misture o creme de leite."] }
         ];
 
-        let recipes = [...defaultRecipes];
-        let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
+        let recipes = [];
+        let recipesLoaded = false;
+        let favorites = (JSON.parse(localStorage.getItem("favorites") || "[]")).map(String);
         let showOnlyFavs = false;
         let currentUser = null;
+        let currentDetailId = null;
+
+        // ---------- Firestore: load recipes in real time ----------
+        recipesRef.orderBy("createdAt", "desc").onSnapshot(snap => {
+            recipesLoaded = true;
+            recipes = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+            if (!recipes.length) recipes = [...defaultRecipes]; // fallback while collection is empty
+            filterRecipes();
+            if (currentDetailId && !document.getElementById("detailView").classList.contains("hidden")) {
+                openDetail(currentDetailId, true);
+            }
+            maybeSeed(snap.empty);
+        }, err => {
+            console.error(err);
+            recipes = [...defaultRecipes];
+            filterRecipes();
+            showToast("Não foi possível carregar as receitas: " + err.message, true);
+        });
+
+        // First time the admin logs in and the collection is empty, upload the default recipes
+        let seeded = false;
+        function maybeSeed(isEmpty) {
+            if (seeded || !isEmpty || !currentUser || !ADMIN_EMAILS.includes(currentUser.email)) return;
+            seeded = true;
+            const batch = db.batch();
+            defaultRecipes.forEach((r, i) => {
+                const { id, ...data } = r;
+                batch.set(recipesRef.doc(id), { ...data, createdAt: firebase.firestore.Timestamp.fromMillis(Date.now() - (i + 1) * 1000) });
+            });
+            batch.commit().catch(err => { seeded = false; showToast("Erro ao salvar receitas iniciais: " + err.message, true); });
+        }
 
         function renderGrid(list) {
             const grid = document.getElementById("recipeGrid");
+            document.getElementById("favCount").textContent = favorites.length;
+            if (!recipesLoaded) {
+                grid.innerHTML = `<p class="col-span-full text-center text-gray-500 py-12">Carregando receitas...</p>`;
+                return;
+            }
             if (!list.length) {
                 grid.innerHTML = `<p class="col-span-full text-center text-gray-500 py-12">Nenhuma receita encontrada.</p>`;
                 return;
             }
             grid.innerHTML = list.map(r => `
-                <div onclick="openDetail(${r.id})" class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden cursor-pointer hover:shadow-md transition flex flex-col">
+                <div onclick="openDetail('${esc(r.id)}')" class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden cursor-pointer hover:shadow-md transition flex flex-col">
                     <div class="h-48 overflow-hidden relative">
                         ${imgTag(r, "w-full h-full object-cover hover:scale-105 transition duration-300")}
-                        <button onclick="event.stopPropagation(); toggleFav(${r.id})" class="absolute top-3 right-3 bg-white/80 backdrop-blur p-2 rounded-full text-sm ${favorites.includes(r.id) ? 'text-red-500' : 'text-gray-600'} hover:bg-white transition">
+                        <button onclick="event.stopPropagation(); toggleFav('${esc(r.id)}')" class="absolute top-3 right-3 bg-white/80 backdrop-blur p-2 rounded-full text-sm ${favorites.includes(r.id) ? 'text-red-500' : 'text-gray-600'} hover:bg-white transition">
                             <i class="fa-${favorites.includes(r.id) ? 'solid' : 'regular'} fa-heart"></i>
                         </button>
                     </div>
                     <div class="p-4 flex flex-col flex-grow">
-                        <span class="text-xs font-semibold text-orange-600 uppercase tracking-wider mb-1">${CATEGORY_LABELS[r.category] || r.category}</span>
+                        <span class="text-xs font-semibold text-orange-600 uppercase tracking-wider mb-1">${esc(CATEGORY_LABELS[r.category] || r.category)}</span>
                         <h3 class="font-bold text-gray-900 text-base mb-2 line-clamp-1">${esc(r.title)}</h3>
                         <div class="mt-auto flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-50">
                             <span><i class="fa-regular fa-clock mr-1"></i> ${esc(r.prepTime)}</span>
@@ -238,7 +291,6 @@
                     </div>
                 </div>
             `).join("");
-            document.getElementById("favCount").textContent = favorites.length;
         }
 
         function filterRecipes() {
@@ -246,15 +298,16 @@
             const cat = document.getElementById("categoryFilter").value;
             const time = document.getElementById("timeFilter").value;
 
-            let filtered = recipes.filter(r => {
-                const matchQuery = r.title.toLowerCase().includes(query) || r.ingredients.some(i => i.toLowerCase().includes(query));
+            const filtered = recipes.filter(r => {
+                const matchQuery = r.title.toLowerCase().includes(query) || (r.ingredients || []).some(i => i.toLowerCase().includes(query));
                 const matchCat = cat === "tudo" || r.category === cat;
                 const matchFav = !showOnlyFavs || favorites.includes(r.id);
-                
+
+                const mins = r.timeMinutes ?? parseMinutes(r.prepTime);
                 let matchTime = true;
-                if (time === "quick") matchTime = r.timeMinutes <= 15;
-                if (time === "medium") matchTime = r.timeMinutes > 15 && r.timeMinutes <= 30;
-                if (time === "long") matchTime = r.timeMinutes > 30;
+                if (time === "quick") matchTime = mins <= 15;
+                if (time === "medium") matchTime = mins > 15 && mins <= 30;
+                if (time === "long") matchTime = mins > 30;
 
                 return matchQuery && matchCat && matchFav && matchTime;
             });
@@ -262,6 +315,7 @@
         }
 
         function toggleFav(id) {
+            id = String(id);
             if (favorites.includes(id)) {
                 favorites = favorites.filter(f => f !== id);
             } else {
@@ -282,13 +336,14 @@
             filterRecipes();
         }
 
-        function openDetail(id) {
-            const r = recipes.find(x => x.id === id);
+        function openDetail(id, keepScroll) {
+            const r = recipes.find(x => x.id === String(id));
             if (!r) return;
+            currentDetailId = r.id;
 
             document.getElementById("catalogView").classList.add("hidden");
             document.getElementById("detailView").classList.remove("hidden");
-            window.scrollTo(0, 0);
+            if (!keepScroll) window.scrollTo(0, 0);
 
             document.getElementById("mainRecipeContent").innerHTML = `
                 <div class="h-72 rounded-xl overflow-hidden mb-6 relative">
@@ -297,37 +352,38 @@
                 <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">${esc(r.title)}</h1>
                 <div class="flex items-center gap-4 text-sm text-gray-500 mb-6 pb-4 border-b">
                     <span><i class="fa-regular fa-clock mr-1"></i> ${esc(r.prepTime)}</span>
-                    <span><i class="fa-solid tag mr-1"></i> ${CATEGORY_LABELS[r.category]}</span>
+                    <span><i class="fa-solid fa-tag mr-1"></i> ${esc(CATEGORY_LABELS[r.category] || r.category)}</span>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div>
                         <h3 class="font-bold text-gray-900 mb-3 text-lg">Ingredientes</h3>
                         <ul class="space-y-2 text-sm text-gray-700">
-                            ${r.ingredients.map(i => `<li class="flex items-start"><i class="fa-solid fa-check text-orange-600 mt-1 mr-2 text-xs"></i><span>${esc(i)}</span></li>`).join("")}
+                            ${(r.ingredients || []).map(i => `<li class="flex items-start"><i class="fa-solid fa-check text-orange-600 mt-1 mr-2 text-xs"></i><span>${esc(i)}</span></li>`).join("")}
                         </ul>
                     </div>
                     <div>
                         <h3 class="font-bold text-gray-900 mb-3 text-lg">Modo de Preparo</h3>
                         <ol class="space-y-3 text-sm text-gray-700">
-                            ${r.instructions.map((ins, idx) => `<li class="flex items-start"><span class="bg-orange-100 text-orange-700 font-bold rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2 flex-shrink-0">${idx+1}</span><span>${esc(ins)}</span></li>`).join("")}
+                            ${(r.instructions || []).map((ins, idx) => `<li class="flex items-start"><span class="bg-orange-100 text-orange-700 font-bold rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2 flex-shrink-0">${idx+1}</span><span>${esc(ins)}</span></li>`).join("")}
                         </ol>
                     </div>
                 </div>
             `;
 
             const related = recipes.filter(x => x.category === r.category && x.id !== r.id).slice(0, 3);
-            document.getElementById("relatedList").innerHTML = related.map(rel => `
-                <div onclick="openDetail(${rel.id})" class="flex items-center gap-3 bg-white p-2.5 rounded-lg border border-gray-100 cursor-pointer hover:bg-gray-50 transition">
+            document.getElementById("relatedList").innerHTML = related.length ? related.map(rel => `
+                <div onclick="openDetail('${esc(rel.id)}')" class="flex items-center gap-3 bg-white p-2.5 rounded-lg border border-gray-100 cursor-pointer hover:bg-gray-50 transition">
                     <div class="w-16 h-16 rounded-md overflow-hidden flex-shrink-0">${imgTag(rel, "w-full h-full object-cover")}</div>
                     <div>
                         <h4 class="text-sm font-bold text-gray-900 line-clamp-1">${esc(rel.title)}</h4>
                         <span class="text-xs text-gray-500">${esc(rel.prepTime)}</span>
                     </div>
                 </div>
-            `).join("");
+            `).join("") : `<p class="text-sm text-gray-500">Nenhuma receita relacionada ainda.</p>`;
         }
 
         function goHome() {
+            currentDetailId = null;
             document.getElementById("detailView").classList.add("hidden");
             document.getElementById("catalogView").classList.remove("hidden");
             window.scrollTo(0, 0);
@@ -365,30 +421,50 @@
                 else adminBtn.classList.add("hidden");
 
                 container.innerHTML = `<button onclick="auth.signOut()" class="text-sm text-gray-600 hover:text-red-600 font-medium">Sair</button>`;
+
+                if (isAdmin && recipesLoaded) {
+                    recipesRef.limit(1).get().then(s => maybeSeed(s.empty)).catch(() => {});
+                }
             } else {
                 adminBtn.classList.add("hidden");
                 container.innerHTML = `<button onclick="openAuthModal()" class="bg-orange-600 text-white px-3.5 py-2 rounded-lg text-sm font-medium hover:bg-orange-700 transition">Entrar</button>`;
             }
         });
 
-        function saveRecipe(e) {
+        async function saveRecipe(e) {
             e.preventDefault();
+            if (!currentUser || !ADMIN_EMAILS.includes(currentUser.email)) {
+                showToast("Apenas administradores podem adicionar receitas.", true);
+                return;
+            }
+            const btn = document.getElementById("saveRecipeBtn");
+            const prepTime = document.getElementById("newPrepTime").value.trim();
             const newRecipe = {
-                id: Date.now(),
-                title: document.getElementById("newTitle").value,
+                title: document.getElementById("newTitle").value.trim(),
                 category: document.getElementById("newCategory").value,
-                prepTime: document.getElementById("newPrepTime").value,
-                timeMinutes: 20,
-                image: document.getElementById("newImage").value,
-                ingredients: document.getElementById("newIngredients").value.split("\n").filter(Boolean),
-                instructions: document.getElementById("newInstructions").value.split("\n").filter(Boolean)
+                prepTime,
+                timeMinutes: parseMinutes(prepTime),
+                image: document.getElementById("newImage").value.trim(),
+                ingredients: document.getElementById("newIngredients").value.split("\n").map(s => s.trim()).filter(Boolean),
+                instructions: document.getElementById("newInstructions").value.split("\n").map(s => s.trim()).filter(Boolean),
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                createdBy: currentUser.email
             };
 
-            recipes.unshift(newRecipe);
-            filterRecipes();
-            closeAdminModal();
-            document.getElementById("recipeForm").reset();
-            showToast("Receita adicionada com sucesso!");
+            btn.disabled = true;
+            pendingWrites++;
+            try {
+                await recipesRef.add(newRecipe);
+                closeAdminModal();
+                document.getElementById("recipeForm").reset();
+                showToast("Receita adicionada com sucesso!");
+            } catch (err) {
+                console.error(err);
+                showToast("Erro ao salvar: " + err.message, true);
+            } finally {
+                pendingWrites--;
+                btn.disabled = false;
+            }
         }
 
         // Inicialização
